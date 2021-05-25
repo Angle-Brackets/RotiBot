@@ -3,11 +3,14 @@ import os
 from settings import *
 from webserver.keep_alive import keep_alive
 from discord.utils import find
+from discord_slash import SlashCommand, SlashCommandOptionType, SlashContext
+from discord.ext import commands
 
 
 token = os.environ['TOKEN']
 
 client = discord.Client()
+slash = SlashCommand(client, sync_commands=True)
 
 @client.event
 async def on_ready():
@@ -33,6 +36,31 @@ async def on_guild_join(guild):
                 await channel.send(res)
                 break
 
+@slash.slash(description="Shows the bot's latency")
+async def ping(ctx):
+    await ctx.send(f'Pong! ({round(client.latency * 1000)}ms)')
+
+talkback_options = [
+    {
+        "name": "triggers",
+        "description": "The words/phrases that activate the bot. ",
+        "required": True,
+        "type": 3,
+    },
+    {
+        "name": "responses",
+        "description": "The words/phrases that the bot responds with.",
+        "required": True,
+        "type": 3
+    }
+]
+
+@slash.subcommand(base="talkback", name="add", description="Add talkback trigger/response pair", options=talkback_options)
+async def _talkback_add(ctx: SlashContext, triggers = str, responses = str):
+    await ctx.defer()
+    notif = add_talkback_phrase(ctx.guild.id, str(triggers), str(responses))
+    await ctx.send(notif)
+
 @client.event
 async def on_message(message):
     if message.author == client.user:
@@ -44,21 +72,10 @@ async def on_message(message):
     if msg.startswith("$print_phrases"):    
         await message.channel.send(get_phrases(message.guild.id))
     if msg.startswith("$del_phrases"):
+        await message.channel.send("Clearing all phrases from server...")
         delete_guild_entry(message.guild.id)
-    if msg.startswith("%new_talkback"):
-        channel = message.channel
-        author = message.author
-        await channel.send("Please type the appropriate response for this trigger phrase below.")
-
-        def check(m):
-            return m.channel == channel and m.author == author
-        
-        response = await client.wait_for('message', check=check)
-   
-        notif = add_talkback_phrase(message.guild.id, msg, response.content if len(response.attachments) == 0 else response.attachments[0].url)
-
-        await message.channel.send(notif)        
-
+        update_phrase_database(message.guild)
+        await message.channel.send("Successfully cleared phrase database for this guild.")
     if msg.startswith("%remove_talkback"):
         notif = remove_talkback(message.guild.id, msg)
         await message.channel.send(notif)
