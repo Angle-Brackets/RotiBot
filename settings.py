@@ -38,38 +38,6 @@ def delete_guild_entry(serverID):
 def get_phrases(serverID):
     return db[str(serverID)]
 
-def add_talkback_phrase(serverID, trigger_phrases, response_phrases):
-    # try:
-    #     trigger = trigger_phrase[len("%new_talkback"):]
-    #     if not trigger.strip() == "" and not response_phrase.strip() == "":
-    #         response = response_phrase
-    #         db[str(serverID)]["trigger_phrases"].append(trigger)
-    #         db[str(serverID)]["response_phrases"].append(response)
-    #         return "New talkback action successfully created."
-    #     return "Failed to create new talkback action."
-    # except:
-    #     return "Failed to create new talkback action."
-
-    try:
-        trigger_list = re.split(r'\s+(?=[^"]*(?:"[^"]*"[^"]*)*$)',trigger_phrases)
-
-        response_list = re.split(r'\s+(?=[^"]*(?:"[^"]*"[^"]*)*$)',response_phrases)
-
-        if len(trigger_list) > 10 or len(response_list) > 10:
-            return "Failed to create new talkback action (greater than 10 triggers or responses given)."
-
-        for i in range(len(trigger_list)):
-            trigger_list[i] = trigger_list[i].replace("\"", "")
-        for i in range(len(response_list)):
-            response_list[i] = response_list[i].replace("\"", "")
-        
-        db[str(serverID)]["trigger_phrases"].append(trigger_list)
-        db[str(serverID)]["response_phrases"].append(response_list)
-
-        return "New talkback action successfully created."
-    except:
-        return "Failed to create new talkback action"
-
 def remove_talkback(serverID, msg):
     #format is %remove_talkback TRIGGER
     trigger_db = db[str(serverID)]["trigger_phrases"]

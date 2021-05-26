@@ -1,5 +1,6 @@
 import discord
 import os
+
 from settings import *
 from webserver.keep_alive import keep_alive
 from discord.utils import find
@@ -9,8 +10,8 @@ from discord.ext import commands
 
 token = os.environ['TOKEN']
 
-client = discord.Client()
-slash = SlashCommand(client, sync_commands=True)
+client = commands.Bot(command_prefix="%")
+slash = SlashCommand(client, sync_commands=True, override_type=True)
 
 @client.event
 async def on_ready():
@@ -18,6 +19,8 @@ async def on_ready():
 
     for guild in client.guilds:
         update_phrase_database(guild)
+    
+    await client.change_presence(activity=discord.Activity(name="based patrol", type=1))
 
 @client.event
 async def on_guild_join(guild):
@@ -40,26 +43,7 @@ async def on_guild_join(guild):
 async def ping(ctx):
     await ctx.send(f'Pong! ({round(client.latency * 1000)}ms)')
 
-talkback_options = [
-    {
-        "name": "triggers",
-        "description": "The words/phrases that activate the bot. ",
-        "required": True,
-        "type": 3,
-    },
-    {
-        "name": "responses",
-        "description": "The words/phrases that the bot responds with.",
-        "required": True,
-        "type": 3
-    }
-]
 
-@slash.subcommand(base="talkback", name="add", description="Add talkback trigger/response pair", options=talkback_options)
-async def _talkback_add(ctx: SlashContext, triggers = str, responses = str):
-    await ctx.defer()
-    notif = add_talkback_phrase(ctx.guild.id, str(triggers), str(responses))
-    await ctx.send(notif)
 
 @client.event
 async def on_message(message):
@@ -79,8 +63,16 @@ async def on_message(message):
     if msg.startswith("%remove_talkback"):
         notif = remove_talkback(message.guild.id, msg)
         await message.channel.send(notif)
+
     elif res is not None:
         await message.channel.send(res)
         
 keep_alive()
+
+#registers all of the commands located in the cogs folder
+if __name__ == '__main__':
+	for cog_file in os.listdir("./cogs"):
+		if cog_file.endswith(".py"):
+			client.load_extension("cogs.{0}".format(cog_file[0:cog_file.index(".py")]))
+
 client.run(token)
