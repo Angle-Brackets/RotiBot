@@ -53,7 +53,8 @@ async def on_message(message):
     msg = message.content
     res = detect_response(message.guild, msg)
 
-    if msg.startswith("$print_phrases"):    
+    if msg.startswith("$print_phrases"):  
+        print(get_phrases(message.guild.id))  
         await message.channel.send(get_phrases(message.guild.id))
     if msg.startswith("$del_phrases"):
         await message.channel.send("Clearing all phrases from server...")
@@ -71,8 +72,8 @@ keep_alive()
 
 #registers all of the commands located in the cogs folder
 if __name__ == '__main__':
-	for cog_file in os.listdir("./cogs"):
-		if cog_file.endswith(".py"):
-			client.load_extension("cogs.{0}".format(cog_file[0:cog_file.index(".py")]))
+    for cog_file in os.listdir("./cogs"):
+        if cog_file.endswith(".py"):
+            client.load_extension("cogs.{0}".format(cog_file[0:cog_file.index(".py")]))
 
 client.run(token)

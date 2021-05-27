@@ -15,4 +15,5 @@ discord = "^1.0.1"
 python = "^3.8"
 replit = "^3.0.0"
 flask = "^1.1.2"
+discord-py-slash-command = "^1.1.2"
 [tool.poetry.dev-dependencies]

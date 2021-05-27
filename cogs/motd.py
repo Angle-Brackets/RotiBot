@@ -10,7 +10,7 @@ class Motd(commands.Cog):
 
 	@cog_ext.cog_slash(name="motd", description="WIP")
 	async def _motd(self, ctx: SlashContext):
-		await ctx.send("testing...")
+		await ctx.send(ctx.author + " is lookin' real sussy")
 
 def setup(bot):
 	bot.add_cog(Motd(bot))

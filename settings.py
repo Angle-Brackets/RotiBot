@@ -38,20 +38,6 @@ def delete_guild_entry(serverID):
 def get_phrases(serverID):
     return db[str(serverID)]
 
-def remove_talkback(serverID, msg):
-    #format is %remove_talkback TRIGGER
-    trigger_db = db[str(serverID)]["trigger_phrases"]
-    for trigger in trigger_db:
-        if trigger.strip() in msg.casefold():
-            res = db[str(serverID)]["response_phrases"][trigger_db.index(trigger)]
-
-            trigger_db.remove(trigger)
-            db[str(serverID)]["response_phrases"].remove(res)
-
-            return "Successfully removed talkback pair " + trigger.strip() + "/" + res.strip() + "."
-    return "No matching trigger phrase found."
-
-
 def detect_response(guild, msg):
     serverID = str(guild.id)
     res = None
