@@ -66,7 +66,7 @@ async def on_message(message):
         await message.channel.send(notif)
 
     elif res is not None:
-        await message.channel.send(res)
+        await message.channel.send(res, delete_after=20)
         
 keep_alive()
 

@@ -3,6 +3,7 @@ import re
 from replit import db
 from discord.ext import commands
 from discord_slash import cog_ext, SlashContext
+import asyncio
 
 def _add_talkback_phrase(serverID, trigger_phrases, response_phrases):
         try:
@@ -26,21 +27,50 @@ def _add_talkback_phrase(serverID, trigger_phrases, response_phrases):
             return "Failed to create new talkback action"
 
 def _remove_talkback(serverID, msg):
-	data = db[str(serverID)]
-	msg = msg[0:msg.index(" ") if " " in msg else len(msg)] #elimates any spaces
-	contents = "" #List of possible triggers found
+    data = db[str(serverID)]
+    msg = msg[0:msg.index(" ") if " " in msg else len(msg)] #elimates any spaces
 
-	partition_words = [] #If somehow it exceeds the 6000 character limit, this stores the words that the list gets split at for multiple pages.
+    all_embeds = list() #If somehow it exceeds the 6000 character limit, this stores all the embeds that the list gets split at for multiple pages.
 
-	trigger_number = 1
+    matched_triggers = list()
+    trigger_number = 1 #number of trigger in matched triggers
 
-	for i in range(len(data["trigger_phrases"])):
-		for j in range(len(data["trigger_phrases"][i])):
-			if msg.casefold() in data["trigger_phrases"][i][j].casefold().strip():
-				contents += "[{0}] ".format(trigger_number) + ", ".join(data["trigger_phrases"][i]) + " / " + ", ".join(data["response_phrases"][i]) + "\n" 
-				trigger_number += 1
-				break
-	return contents + "\n" + "length: " + str(len(contents)) + " characters." if len(contents) > 0 else "No potential trigger/response pairs found"
+    empty_embed = discord.Embed(title="Possible Related Trigger/Response Pairs", description="Enter the number corresponding to the trigger/response pair you would like to remove. React with X to cancel command.", color=0xecc98e)
+
+    embed = empty_embed
+
+    def _update_embed(embed, trigger_number, index):
+        potential_trigger = "[{0}] ".format(trigger_number) + ", ".join(data["trigger_phrases"][index])
+
+        potential_res = ", ".join(data["response_phrases"][index])
+
+        embed.add_field(name=potential_trigger, value=potential_res, inline=False)
+                    
+        trigger_number += 1
+        matched_triggers.append(data["trigger_phrases"][index])
+
+
+    for i in range(len(data["trigger_phrases"])):
+        for j in range(len(data["trigger_phrases"][i])):
+            if msg.casefold() in data["trigger_phrases"][i][j].casefold().strip():
+                if not len(embed) > 6000:
+                    _update_embed(embed, trigger_number, i)
+                    trigger_number += 1 
+                else:
+                    all_embeds.append(embed)
+
+                    embed = empty_embed
+
+                    _update_embed(embed, trigger_number, i)
+                    
+                    trigger_number += 1
+                break
+
+    if embed.fields == empty_embed.fields:
+        embed.add_field(name="No potential trigger/response pairs found.", value="Epic Embed Fail.", inline=False)
+    
+    all_embeds.append(embed)
+    return [all_embeds, matched_triggers]
 
 class Talkback(commands.Cog):
     def __init__(self, bot):
@@ -87,9 +117,43 @@ class Talkback(commands.Cog):
     @cog_ext.cog_subcommand(base="talkback", name="remove", description="Remove a current talkback trigger/response pair", options=talkback_remove_options)
     async def _talkback_remove(self, ctx: SlashContext, trigger = str):
         await ctx.defer()
-        embed = discord.Embed(title="Possible Trigger/Response Pairs", description=_remove_talkback(ctx.guild.id, trigger), color=discord.Color.from_rgb(236, 201, 142))
-		
-        await ctx.send(content="still not done xD", embeds=[embed])
+
+        def check(reaction, user):
+            return user == ctx.author and str(reaction.emoji) in ["◀️", "▶️", "❌"]
+
+        res = _remove_talkback(ctx.guild.id, str(trigger))
+        page, pages = 1, len(res[0]) #Subtract 1 for index!
+
+        msg = await ctx.send(embed=res[0][page-1])
+
+        if pages > 1:
+            await msg.add_reaction("◀️")
+            await msg.add_reaction("▶️")
+        await msg.add_reaction("❌")
+        
+        while True:
+            try:
+                reaction, user = await self.bot.wait_for("reaction_add", timeout=60, check=check)
+
+                if str(reaction.emoji) == "▶️" and page is not pages:
+                    pages += 1
+                    await msg.edit(embed=res[0][page-1])
+                    await msg.remove_reaction(reaction, user)    
+                elif str(reaction.emoji) == "◀️" and page > 1:
+                    await msg.edit(embed=res[0][page-1])
+                    await msg.remove_reaction(reaction,user)
+                elif str(reaction.emoji) == "❌":
+                    await msg.remove_reaction(reaction, self.bot.user)
+                    await msg.delete()
+                    break
+                else:
+                    await msg.remove_reaction(reaction,user)
+            except asyncio.TimeoutError:
+                await msg.delete()
+                break
+        
+
+        
 
 
 def setup(bot):
