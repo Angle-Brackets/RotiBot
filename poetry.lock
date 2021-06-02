@@ -184,17 +184,6 @@ version = "1.20.3"
 
 [[package]]
 category = "main"
-description = "A fast, robust library to check for offensive language in strings."
-name = "profanity-check"
-optional = false
-python-versions = "*"
-version = "1.0.3"
-
-[package.dependencies]
-scikit-learn = ">=0.20.2"
-
-[[package]]
-category = "main"
 description = "A library for interacting with features of repl.it"
 name = "replit"
 optional = false
@@ -279,7 +268,7 @@ idna = ">=2.0"
 multidict = ">=4.0"
 
 [metadata]
-content-hash = "2d4701d9e059bb14f03e158a1e1719267663ee97cea9cacfb57e063242125dcf"
+content-hash = "1042a1dc8b5e6595e446a90fbb5e13aac559bcc85baa69a4a6165dc8c34144cd"
 python-versions = "^3.8"
 
 [metadata.files]
@@ -473,10 +462,6 @@ numpy = [
     {file = "numpy-1.20.3-cp39-cp39-win_amd64.whl", hash = "sha256:6690080810f77485667bfbff4f69d717c3be25e5b11bb2073e76bb3f578d99b4"},
     {file = "numpy-1.20.3-pp37-pypy37_pp73-manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:4e465afc3b96dbc80cf4a5273e5e2b1e3451286361b4af70ce1adb2984d392f9"},
     {file = "numpy-1.20.3.zip", hash = "sha256:e55185e51b18d788e49fe8305fd73ef4470596b33fc2c1ceb304566b99c71a69"},
-]
-profanity-check = [
-    {file = "profanity-check-1.0.3.tar.gz", hash = "sha256:b32dd3444a1fccc8527aa29330970e447b9f67659454127a15e85078ce77eb21"},
-    {file = "profanity_check-1.0.3-py3-none-any.whl", hash = "sha256:553fbe8bc0aee14dcebf93a751e4e54e5d14f58c12a364d63b9146a75c5e4e78"},
 ]
 replit = [
     {file = "replit-3.0.0-py3-none-any.whl", hash = "sha256:3dd4f21b8b2a44b8c645a15e87398fa129b356cb6a88faa5eedd30374cc404e1"},

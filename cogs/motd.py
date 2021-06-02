@@ -36,9 +36,10 @@ class Motd(commands.Cog):
 		await ctx.defer()
 		motd_entry = str(db[str(ctx.guild.id)]["motd"])
 		profanity_level = predict_prob([motd])[0]
+		print(profanity_level)
 
 		if len(motd) > 128:
-			await ctx.send(content="Failed to add given MEssage of the Day - Message exceeded max of 128 characters.")
+			await ctx.send(content="Failed to add given Message of the Day - Message exceeded max of 128 characters.")
 		elif profanity_level <= 0.65:
 			db[str(ctx.guild.id)]["motd"] = motd
 
@@ -67,7 +68,7 @@ class Motd(commands.Cog):
 		if db[str(ctx.guild.id)]["motd"]:
 			await ctx.send(content="The current MOTD associated with this server is: \"{0}\"".format(db[str(ctx.guild.id)]["motd"]))
 		else:
-			await ctx.send(content="There is no MOTD associated with this server currently, add one using /motd add!.")
+			await ctx.send(content="There is no MOTD associated with this server currently, add one using /motd add!")
 
 	@tasks.loop(hours=3)
 	async def motd_swap(self):

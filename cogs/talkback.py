@@ -1,5 +1,6 @@
 import discord
 import re
+import random
 from replit import db
 from discord.ext import commands
 from discord_slash import cog_ext, SlashContext
@@ -103,6 +104,23 @@ class Talkback(commands.Cog):
        },
    ]
 
+	#This is the listener that actually responds with the appropriate response.
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        if message.author == self.bot.user:
+            return
+
+        msg = message.content
+        serverID = str(message.guild.id)
+
+        if serverID in db.keys():
+            for trigger_list in db[serverID]["trigger_phrases"]:
+                for trigger in trigger_list:
+                    if trigger.casefold().strip() in msg.casefold():
+                        await message.channel.send(random.choice(db[serverID]["response_phrases"][db[serverID]["trigger_phrases"].index(trigger_list)]))
+                        return
+    
+    
     @cog_ext.cog_subcommand(base="talkback", name="add", description="Add a new talkback trigger/response pair", options=talkback_add_options)
     async def _talkback_add(self, ctx: SlashContext, triggers = str, responses = str):
         await ctx.defer()

@@ -10,7 +10,7 @@ DATA_STRUCTURE = {
 }
 
 
-def update_phrase_database(guild):
+def update_database(guild):
     serverID = str(guild.id)
 
     if serverID not in db.keys():
@@ -36,17 +36,5 @@ def delete_guild_entry(serverID):
         del db[str(serverID)]
         
 
-def get_phrases(serverID):
+def get_data(serverID):
     return db[str(serverID)]
-
-def detect_response(guild, msg):
-    serverID = str(guild.id)
-    res = None
-
-    if serverID in db.keys():
-        #need to add what the bot would do if the word is banned
-        for trigger_list in db[serverID]["trigger_phrases"]:
-            for trigger in trigger_list:
-                if trigger.casefold().strip() in msg.casefold():
-                    res = random.choice(db[serverID]["response_phrases"][db[serverID]["trigger_phrases"].index(trigger_list)])
-    return res
