@@ -1,3 +1,6 @@
+#ROTI BOT V0.5 ALPHA
+#BY SOUPA#0524, CURRENTLY WRITTEN IN PYTHON USING REPLIT DATABASE FOR DATA.
+
 import discord
 import os
 
@@ -7,10 +10,12 @@ from discord.utils import find
 from discord_slash import SlashCommand, SlashCommandOptionType, SlashContext
 from discord.ext import commands
 
+from cogs.motd import choose_motd
+
 
 token = os.environ['TOKEN']
 
-client = commands.Bot(command_prefix="%")
+client = commands.Bot(command_prefix="prefix")
 slash = SlashCommand(client, sync_commands=True, override_type=True)
 
 @client.event
@@ -20,7 +25,7 @@ async def on_ready():
     for guild in client.guilds:
         update_phrase_database(guild)
     
-    await client.change_presence(activity=discord.Activity(name="based patrol", type=1))
+    await client.change_presence(activity=discord.Activity(name=choose_motd(), type=1))
 
 @client.event
 async def on_guild_join(guild):
@@ -53,17 +58,20 @@ async def on_message(message):
     msg = message.content
     res = detect_response(message.guild, msg)
 
-    if msg.startswith("$print_phrases"):  
-        print(get_phrases(message.guild.id))  
-        await message.channel.send(get_phrases(message.guild.id))
-    if msg.startswith("$del_phrases"):
-        await message.channel.send("Clearing all phrases from server...")
-        delete_guild_entry(message.guild.id)
-        update_phrase_database(message.guild)
-        await message.channel.send("Successfully cleared phrase database for this guild.")
-    if msg.startswith("%remove_talkback"):
-        notif = remove_talkback(message.guild.id, msg)
-        await message.channel.send(notif)
+    if message.author.id == (163045781316698112):
+        if msg.startswith("$print_phrases"):  
+            print(get_phrases(message.guild.id))  
+            await message.channel.send(get_phrases(message.guild.id))
+        elif msg.startswith("$del_phrases"):
+            await message.channel.send("Clearing all phrases from server...")
+            delete_guild_entry(message.guild.id)
+            update_phrase_database(message.guild)
+            await message.channel.send("Successfully cleared phrase database for this guild.")
+        elif msg.startswith("$shuffle_status"):
+            await client.change_presence(activity=discord.Activity(name=choose_motd(), type=1))
+            await message.channel.send("Shuffled!")
+
+
 
     elif res is not None:
         await message.channel.send(res, delete_after=20)

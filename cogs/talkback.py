@@ -97,7 +97,7 @@ class Talkback(commands.Cog):
     talkback_remove_options = [
        {
            "name": "trigger",
-           "description": "A word or phrase that is identical or similar to one in a talkback action",
+           "description": "A word or phrase that is identical or similar to one in a talkback action.",
            "required": True,
            "type": 3,
        },
