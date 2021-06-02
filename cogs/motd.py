@@ -1,10 +1,10 @@
 import random
-from discord.ext import commands
+import discord
+from discord.ext import commands, tasks
 from discord_slash import cog_ext, SlashContext
 from replit import db
 from profanity_check import predict_prob
 
-#TODO: Add for the MOTD to be cycled every 3 hours.
 def choose_motd(current_motd = None):
 	keys = list(db.keys())
 
@@ -20,6 +20,7 @@ def choose_motd(current_motd = None):
 class Motd(commands.Cog):
 	def __init__(self, bot):
 		self.bot = bot
+		self.motd_swap.start()
 
 	motd_options = [
 		{
@@ -67,6 +68,21 @@ class Motd(commands.Cog):
 			await ctx.send(content="The current MOTD associated with this server is: \"{0}\"".format(db[str(ctx.guild.id)]["motd"]))
 		else:
 			await ctx.send(content="There is no MOTD associated with this server currently, add one using /motd add!.")
+
+	@tasks.loop(hours=3)
+	async def motd_swap(self):
+		member = None
+		for guild in self.bot.guilds:
+			member = guild.get_member(self.bot.user.id)
+			break
+		
+		await self.bot.change_presence(activity=discord.Activity(name=choose_motd(member.activity.name), type=1))
+		
+
+	@motd_swap.before_loop
+	async def before_tester(self):
+		print("Initializing...")
+		await self.bot.wait_until_ready()
 
 def setup(bot):
 	bot.add_cog(Motd(bot))
