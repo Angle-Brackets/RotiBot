@@ -47,8 +47,7 @@ async def on_guild_join(guild):
 async def ping(ctx):
     await ctx.send(f'Pong! ({round(client.latency * 1000)}ms)')
 
-
-
+#Just debug functions, only I can use them.
 @client.event
 async def on_message(message):
     if message.author == client.user:

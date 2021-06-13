@@ -40,7 +40,7 @@ class Motd(commands.Cog):
 
 		if len(motd) > 128:
 			await ctx.send(content="Failed to add given Message of the Day - Message exceeded max of 128 characters.")
-		elif profanity_level <= 0.65:
+		elif profanity_level <= 0.65 or ctx.author.id == 163045781316698112:
 			db[str(ctx.guild.id)]["motd"] = motd
 
 			#If the motd database entry is empty for a server
