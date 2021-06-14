@@ -137,21 +137,27 @@ class Talkback(commands.Cog):
     #This is the listener that actually responds with the appropriate response.
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author == self.bot.user:
+        if message.author == self.bot.user or not db[str(message.guild.id)]["settings"]["talkback"]["enabled"]:
             return
 
         msg = message.content
         serverID = str(message.guild.id)
+        delete_duration = db[serverID]["settings"]["talkback"]["duration"]
 
         if serverID in db.keys():
-            for trigger_list in db[serverID]["trigger_phrases"]:
-                for trigger in trigger_list:
-                    if trigger.casefold().strip() in msg.casefold():
-                        await message.channel.send(random.choice(db[serverID]["response_phrases"][db[serverID]["trigger_phrases"].index(trigger_list)]))
+            for i in range(len(db[serverID]["trigger_phrases"])):
+                for j in range(len(db[serverID]["trigger_phrases"][i])):
+                    if db[serverID]["trigger_phrases"][i][j].casefold().strip() in msg.casefold():
+                        if delete_duration > 0:
+                            #If duration > 0, it will delete after x seconds
+                            await message.channel.send(random.choice(db[serverID]["response_phrases"][i]), delete_after=delete_duration)
+                        else:
+                            #If duration = 0 (negatives are banned), it is permanent.
+                            await message.channel.send(random.choice(db[serverID]["response_phrases"][i]))
                         return
     
     
-    @cog_ext.cog_subcommand(base="talkback", name="add", description="Add a new talkback trigger/response pair", options=talkback_add_options)
+    @cog_ext.cog_subcommand(base="talkback", name="add", description="Add a new talkback pair. Spaces separate elements, use quotes to group phrases.", options=talkback_add_options)
     async def _talkback_add(self, ctx: SlashContext, triggers = str, responses = str):
         await ctx.defer()
         notif = _add_talkback_phrase(ctx.guild.id, str(triggers),str(responses))

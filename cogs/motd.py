@@ -3,7 +3,6 @@ import discord
 from discord.ext import commands, tasks
 from discord_slash import cog_ext, SlashContext
 from replit import db
-from profanity_check import predict_prob
 
 def choose_motd(current_motd = None):
 	keys = list(db.keys())
@@ -35,12 +34,11 @@ class Motd(commands.Cog):
 	async def _motd_add(self, ctx: SlashContext, motd = str):
 		await ctx.defer()
 		motd_entry = str(db[str(ctx.guild.id)]["motd"])
-		profanity_level = predict_prob([motd])[0]
-		print(profanity_level)
+		
 
 		if len(motd) > 128:
 			await ctx.send(content="Failed to add given Message of the Day - Message exceeded max of 128 characters.")
-		elif profanity_level <= 0.65 or ctx.author.id == 163045781316698112:
+		else:
 			db[str(ctx.guild.id)]["motd"] = motd
 
 			#If the motd database entry is empty for a server
@@ -48,8 +46,6 @@ class Motd(commands.Cog):
 				await ctx.send(content="Successfully added new message of the day: \"{0}\"\n Overwrote previous entry: \"{1}\"".format(motd, motd_entry))
 			else:
 				await ctx.send(content="Successfully added new message of the day: \"{0}\"".format(motd))
-		else:
-			await ctx.send(content="Failed to add given Message of the Day - Detected Profanity.")
 	
 	@cog_ext.cog_subcommand(base="motd", name="clear", description="Removes the \"Message of the Day\" associated with this guild.")
 	async def _motd_remove(self, ctx: SlashContext):

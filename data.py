@@ -7,8 +7,13 @@ DATA_STRUCTURE = {
     "trigger_phrases": [],
     "response_phrases": [],
 	"motd": "",
+	"settings": {
+		"talkback": {
+			"enabled": True, #Whether talkbacks are enabled
+			"duration": 0, #How long the message exists before being deleted, 0 is permanent.
+		}
+	},
 }
-
 
 def update_database(guild):
     serverID = str(guild.id)
