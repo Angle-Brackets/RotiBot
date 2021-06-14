@@ -11,6 +11,7 @@ DATA_STRUCTURE = {
 		"talkback": {
 			"enabled": True, #Whether talkbacks are enabled
 			"duration": 0, #How long the message exists before being deleted, 0 is permanent.
+			"strict": False #Dictates if the bot will only look at substrings when responding, or will need EXACT matches of words to respond. (case ignored in both)
 		}
 	},
 }

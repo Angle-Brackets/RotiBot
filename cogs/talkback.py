@@ -96,6 +96,11 @@ def _generate_embed_and_triggers(guild, msg, list_enabled = False):
 
     return [all_embeds, matched_triggers] if not list_enabled else all_embeds
 
+#This is the strict match algorithm, only will return true if there is at least 1 exact match for a trigger in a message.
+#Ex: trigger = "HERE" and msg = "THERE", strict match would return False whereas the normal matching algorithm would return True, since "here" is a substring of "there".
+def _strict_match(trigger, msg):
+    return len(re.findall('\\b' + trigger + '\\b', msg.casefold(), flags=re.IGNORECASE)) > 0
+
 class Talkback(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -143,11 +148,21 @@ class Talkback(commands.Cog):
         msg = message.content
         serverID = str(message.guild.id)
         delete_duration = db[serverID]["settings"]["talkback"]["duration"]
+        strict = db[serverID]["settings"]["talkback"]["strict"]
 
         if serverID in db.keys():
             for i in range(len(db[serverID]["trigger_phrases"])):
                 for j in range(len(db[serverID]["trigger_phrases"][i])):
-                    if db[serverID]["trigger_phrases"][i][j].casefold().strip() in msg.casefold():
+                    if strict and _strict_match(db[serverID]["trigger_phrases"][i][j].casefold().strip(), msg.casefold()):
+                        if delete_duration > 0:
+                            #If duration > 0, it will delete after x seconds
+                            await message.channel.send(random.choice(db[serverID]["response_phrases"][i]), delete_after=delete_duration)
+                        else:
+                            #If duration = 0 (negatives are banned), it is permanent.
+                            await message.channel.send(random.choice(db[serverID]["response_phrases"][i]))
+                        return
+                        
+                    elif not strict and db[serverID]["trigger_phrases"][i][j].casefold().strip() in msg.casefold():
                         if delete_duration > 0:
                             #If duration > 0, it will delete after x seconds
                             await message.channel.send(random.choice(db[serverID]["response_phrases"][i]), delete_after=delete_duration)
