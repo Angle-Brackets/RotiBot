@@ -1,4 +1,4 @@
-#ROTI BOT V0.80 ALPHA
+#ROTI BOT V1.0 ALPHA
 #BY SOUPA#0524, CURRENTLY WRITTEN IN PYTHON USING REPLIT DATABASE FOR DATA.
 
 import discord
@@ -29,7 +29,7 @@ async def on_ready():
 @client.event
 async def on_guild_join(guild):
     #tries to find a general channel in the discord to send this in.
-    general = find(lambda x: x.name == 'general',  guild.text_channels)
+    general = find(lambda x: x.name == 'general', guild.text_channels)
     if general and general.permissions_for(guild.me).send_messages:
         await general.send('Hello {0}, I\'m Roti! Thank you for adding me to this guild. You can check my commands by doing %commands. Wait a moment while I prepare my database for this server...'.format(guild.name))
         res = update_database(guild)
@@ -67,6 +67,22 @@ async def on_message(message):
         elif msg.startswith("$shuffle_status"):
             await client.change_presence(activity=discord.Activity(name=choose_motd(), type=1))
             await message.channel.send("Shuffled!")
+        elif msg.startswith("$update_msg"):
+            update = msg[len("$update_msg"):] #actual update message
+            guild_list = client.guilds[:] #Each guild is removed if it has some general channel and successfully sent the update, the remaining ones go into the more general algorithm that just finds the first channel the bot can send messages in.
+
+            for guild in client.guilds:
+                general = find(lambda x: x.name == 'general' or "general" in x.name, guild.text_channels)
+                if general and general.permissions_for(guild.me).send_messages:
+                    await general.send(update)
+                    guild_list.remove(guild)
+            
+            for j in range(len(guild_list)):
+                for channel in guild_list[j].text_channels:
+                    if channel.permissions_for(guild.me).send_messages:
+                        await channel.send(update)
+                
+
         
 keep_alive()
 

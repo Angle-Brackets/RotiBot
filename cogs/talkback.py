@@ -5,12 +5,18 @@ from replit import db
 from discord.ext import commands
 from discord_slash import cog_ext, SlashContext
 import asyncio
+import sys, os
 
+#Adds new talkbacks, also automerges talkbacks if a duplicate trigger is given.
 def _add_talkback_phrase(serverID, trigger_phrases, response_phrases):
         try:
+            res = ""
+            t_data = db[str(serverID)]["trigger_phrases"]
+            r_data = db[str(serverID)]["response_phrases"]
             trigger_list = re.split(r'\s+(?=[^"]*(?:"[^"]*"[^"]*)*$)',trigger_phrases)
 
             response_list = re.split(r'\s+(?=[^"]*(?:"[^"]*"[^"]*)*$)',response_phrases)
+            
 
             if len(trigger_list) > 10 or len(response_list) > 10:
                 return "Failed to create new talkback action (greater than 10 triggers or responses given)."
@@ -20,11 +26,36 @@ def _add_talkback_phrase(serverID, trigger_phrases, response_phrases):
             for i in range(len(response_list)):
                 response_list[i] = response_list[i].replace("\"", "")
             
+            #lowercases everything
+            t_data = [ [ item.lower() for item in sublist ] for sublist in t_data] 
+            
+            #If a duplicate trigger is given, this loop attempts to merge the two response lists together since they share the same trigger.
+            trigger_list_copy = trigger_list[:]
+            for i in range(len(t_data)):
+                trigger_set = t_data[i]
+                
+                for j in range(len(trigger_list)):
+                    if trigger_list[j].casefold() in trigger_set:
+                        if len(response_list) + len(r_data[i]) > 10:
+                            res += "Failed to merge duplicate trigger {0} due to response cap being exceeded.\n".format(trigger_list[j])
+                            trigger_list_copy.remove(trigger_list[j])
+                            
+                        else:
+                            res += "Successfully merged trigger {0} with pre-existing talkback combo.\n".format(trigger_list[j])
+                            trigger_list_copy.remove(trigger_list[j])
+                            db[str(serverID)]["response_phrases"][i] += response_list
+                            
+            trigger_list = trigger_list_copy
+            
             db[str(serverID)]["trigger_phrases"].append(trigger_list)
             db[str(serverID)]["response_phrases"].append(response_list)
 
-            return "New talkback action successfully created."
-        except:
+            return "Successfully created new talkback." if not res else (res + "Successfully added new talkback.")
+        except Exception as e:
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            print(exc_type, fname, exc_tb.tb_lineno)
+            print(e)
             return "Failed to create new talkback action"
 
 #This function is quite complex, in essence this function finds the triggers that most similarly match the given keyword and returns them, while also formatting the embed that stores them all.
