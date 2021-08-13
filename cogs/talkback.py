@@ -180,11 +180,13 @@ class Talkback(commands.Cog):
         serverID = str(message.guild.id)
         delete_duration = db[serverID]["settings"]["talkback"]["duration"]
         strict = db[serverID]["settings"]["talkback"]["strict"]
+        probability = db[serverID]["settings"]["talkback"]["res_probability"] / 100
 
         if serverID in db.keys():
             for i in range(len(db[serverID]["trigger_phrases"])):
                 for j in range(len(db[serverID]["trigger_phrases"][i])):
-                    if strict and _strict_match(db[serverID]["trigger_phrases"][i][j].casefold().strip(), msg.casefold()):
+                    rand = random.random()
+                    if strict and _strict_match(db[serverID]["trigger_phrases"][i][j].casefold().strip(), msg.casefold()) and probability >= rand:
                         if delete_duration > 0:
                             #If duration > 0, it will delete after x seconds
                             await message.channel.send(random.choice(db[serverID]["response_phrases"][i]), delete_after=delete_duration)
@@ -193,7 +195,7 @@ class Talkback(commands.Cog):
                             await message.channel.send(random.choice(db[serverID]["response_phrases"][i]))
                         return
                         
-                    elif not strict and db[serverID]["trigger_phrases"][i][j].casefold().strip() in msg.casefold():
+                    elif not strict and db[serverID]["trigger_phrases"][i][j].casefold().strip() in msg.casefold() and probability >= rand:
                         if delete_duration > 0:
                             #If duration > 0, it will delete after x seconds
                             await message.channel.send(random.choice(db[serverID]["response_phrases"][i]), delete_after=delete_duration)
@@ -201,6 +203,7 @@ class Talkback(commands.Cog):
                             #If duration = 0 (negatives are banned), it is permanent.
                             await message.channel.send(random.choice(db[serverID]["response_phrases"][i]))
                         return
+
     
     
     @cog_ext.cog_subcommand(base="talkback", name="add", description="Add a new talkback pair. Spaces separate elements, use quotes to group phrases.", options=talkback_add_options)
@@ -284,6 +287,10 @@ class Talkback(commands.Cog):
     @cog_ext.cog_subcommand(base="talkback", name="list", description="Lists all talkback pairs present in server.", options=talkback_list_options)
     async def _talkback_list(self, ctx: SlashContext, keyword = str):
         await ctx.defer()
+
+        if len(db[str(ctx.guild.id)]["trigger_phrases"]) == 0:
+            await ctx.send("No talkbacks are currently present on this server.")
+            return
         
         def check_reaction(reaction, user):
             return user == ctx.author and str(reaction.emoji) in ["◀️", "▶️", "❌"]

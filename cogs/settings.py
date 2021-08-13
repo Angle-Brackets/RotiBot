@@ -34,6 +34,15 @@ class Settings(commands.Cog):
         }
     ]
 
+    talkback_settings_prob_options = [
+          {
+               "name": "probability",
+               "type": 4,
+               "description": "Probability that Roti will respond to a talkback trigger, percentage from 0 - 100%.",
+               "required": False
+          }
+     ]
+
     @cog_ext.cog_subcommand(base="settings", subcommand_group="talkback", name="enabled", description="Change settings for commands.", sub_group_desc="Change the settings regarding the /talkback command.", options=talkback_settings_enable_options)
     async def _talkback_enable(self, ctx : SlashContext, state = None):
         await ctx.defer()
@@ -67,7 +76,19 @@ class Settings(commands.Cog):
             await ctx.send("Invalid length specified (minimum of 0).")
         else:
             db[str(ctx.guild.id)]["settings"]["talkback"]["duration"] = length
-            await ctx.send("Successfully {0}".format("set talkback responses to be delete after " + str(length) + " seconds." if length > 0 else "set talkback responses to remain permanently in chat."))        
+            await ctx.send("Successfully {0}".format("set talkback responses to be delete after " + str(length) + " seconds." if length > 0 else "set talkback responses to remain permanently in chat."))
+
+    @cog_ext.cog_subcommand(base="settings", subcommand_group="talkback", name="probability", description="Change settings for commands.", sub_group_desc="Change the settings regarding the /talkback command.", options=talkback_settings_prob_options)
+    async def _talkback_prob(self, ctx: SlashContext, probability = None):
+        await ctx.defer()
+        currentProb = db[str(ctx.guild.id)]["settings"]["talkback"]["res_probability"]
+        if probability is None:
+            await ctx.send("Currently, I have a {0}% chance to respond to talkback triggers.".format(currentProb))
+        elif probability < 0 or probability > 100:
+            await ctx.send("Invalid probability specified (Integer between 0 and 100, inclusive).")
+        else:
+            db[str(ctx.guild.id)]["settings"]["talkback"]["res_probability"] = probability
+            await ctx.send("Successfully set probability to respond to talkbacks to {0}%".format(probability))             
 
 def setup(bot):
     bot.add_cog(Settings(bot))
