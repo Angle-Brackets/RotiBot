@@ -11,7 +11,6 @@ from discord.ext import commands
 from discord_slash import SlashCommand, SlashContext
 from cogs.motd import choose_motd
 
-
 token = os.environ['TOKEN']
 
 client = commands.Bot(command_prefix="prefix")

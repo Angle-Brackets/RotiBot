@@ -3,7 +3,9 @@ import re
 import random
 from replit import db
 from discord.ext import commands
-from discord_slash import cog_ext, SlashContext
+from discord_slash import cog_ext, SlashContext, ComponentContext
+from discord_slash.utils.manage_components import create_button, create_actionrow, wait_for_component
+from discord_slash.model import ButtonStyle
 import asyncio
 import sys, os
 
@@ -294,21 +296,62 @@ class Talkback(commands.Cog):
         
         def check_reaction(reaction, user):
             return user == ctx.author and str(reaction.emoji) in ["◀️", "▶️", "❌"]
-        
+
         embeds = _generate_embed_and_triggers(ctx.guild, str(keyword) if not isinstance(keyword, type) else "", list_enabled=True)
 
         page, pages = 1, len(embeds) #Subtract 1 for index
+        #buttons = None
+
+		#anything commented out is for when they fix buttons -.-
+        # if pages > 1:
+        #     buttons = [
+        #         create_button(
+        #             style=1,
+        #             label="Next"
+        #         ),
+        #         create_button(
+        #             style=1,
+        #             label="Previous"
+        #         ),
+        #         create_button(
+        #             style=4,
+        #             label="Cancel"
+        #         )
+        #        ]
+        # else:
+        #     buttons = [
+        #         create_button(
+        #             style=4,
+        #             label="Cancel"
+        #         )
+        #        ]
 
         msg = await ctx.send(embed=embeds[page-1])
-
         if pages > 1:
             await msg.add_reaction("◀️")
             await msg.add_reaction("▶️")
         await msg.add_reaction("❌")
+          
+        #action_row = create_actionrow(*buttons)
 
         while True:
             try:
                 reaction, user = await self.bot.wait_for("reaction_add", timeout=60, check=check_reaction)
+            #     button_ctx : ComponentContext = await wait_for_component(self.bot, messages=msg)
+
+            #     choice = button_ctx.custom_id
+
+            #     if choice == "Next" and page is not pages:
+            #         page += 1
+            #         await msg.edit(embed=embeds[page-1], components=[action_row])
+            #     elif choice == "Previous" and page > 1:
+            #         page -= 1
+            #         await msg.edit(embed=embeds[page-1], components=[action_row])
+            #     else:
+            #         await msg.delete()
+
+            # except asyncio.TimeoutError:
+            #     await msg.delete()
 
                 if str(reaction.emoji) == "▶️" and page is not pages:
                     page += 1

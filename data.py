@@ -7,12 +7,18 @@ DATA_STRUCTURE = {
     "trigger_phrases": [],
     "response_phrases": [],
 	"motd": "",
+	"music_queue": [], #I would like to use a queue here..but there is a circular logic error that stops me
 	"settings": {
 		"talkback": {
 			"enabled": True, #Whether talkbacks are enabled
 			"duration": 0, #How long the message exists before being deleted, 0 is permanent.
 			"strict": False, #Dictates if the bot will only look at substrings when responding, or will need EXACT matches of words to respond. (case ignored in both)
 			"res_probability": 100 #Percentage that the bot will respond to a talkback
+		},
+		
+		"music": {
+			"looped": False, #If its looped...duh
+			"speed": 1 #Speed of songs, x1 - x2 speed. 
 		}
 	},
 }
