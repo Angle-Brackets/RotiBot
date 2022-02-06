@@ -1,0 +1,7 @@
+discord.py==1.7.3
+discord_py_interactions==4.0.2
+discord_py_slash_command==3.0.3
+Flask==2.0.2
+pymongo==4.0.1
+python-dotenv==0.19.2
+wavelink==1.1.0

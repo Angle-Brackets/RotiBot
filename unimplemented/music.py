@@ -3,8 +3,13 @@ import discord
 import wavelink
 from discord.ext import commands, tasks
 from discord_slash import cog_ext, SlashContext
-from replit import db
 
+import data
+from data import db
+
+"""
+STILL HAVE NOT ADDED THIS BECAUSE THE ENTIRE LIBRARY WAS REWRITTEN SO IT REQUIRES A REWRITE!
+"""
 
 def _generate_queue_embed(queue):
 	embed = discord.Embed(title="Music Queue:", color=0xecc98e)
@@ -62,8 +67,9 @@ class Music(commands.Cog):
 	@cog_ext.cog_slash(name="disconnect", description="Makes the bot disconnect from a voice channel.")
 	async def _disconnect(self, ctx: SlashContext):
 		await ctx.defer()
-		await ctx.voice_client.disconnect()
-		db[str(ctx.guild.id)]["music_queue"].clear()
+		await ctx.voice_client.disconnect(force=True)
+		db[ctx.guild.id]["music_queue"].clear()
+		data.push_data(ctx.guild.id, "music_queue")
 		await ctx.send("Disconnected from voice.")
 	
 	@cog_ext.cog_slash(name="pause", description="Pauses the audio Roti's playing.")

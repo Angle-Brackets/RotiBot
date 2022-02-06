@@ -1,8 +1,25 @@
-from replit import db
 import re
 import random
+import os
+from pymongo import MongoClient
+from dotenv import load_dotenv
+import time
 
+load_dotenv(".env")
+cluster = MongoClient(os.getenv('DATABASE'))
+
+collections = cluster["Roti"]["data"] #Actual MongoDB database
+db = dict() #quick access to data, but must be updated when values changed
+
+#Takes data, puts into variable named db and keys the data using the serverID
+for data in collections.find({}):
+    db[data['server_id']] = data
+
+#To get a server's data, you need to do db[<server_id>][<category>] (ID IS NOT A STRING!)
+
+#This is like a template for the data.
 DATA_STRUCTURE = {
+    "server_id": -1,
     "banned_phrases": [],
     "trigger_phrases": [],
     "response_phrases": [],
@@ -24,29 +41,39 @@ DATA_STRUCTURE = {
 }
 
 def update_database(guild):
-    serverID = str(guild.id)
+    serverID = guild.id
 
     if serverID not in db.keys():
-        db[serverID] = DATA_STRUCTURE
+        temp = DATA_STRUCTURE
+        temp['server_id'] = serverID
+        collections.insert_one(temp)
         return "Successfully created database entry for {0.name}. Have fun!".format(guild)
 
-    elif serverID in db.keys() and db[serverID].keys() != DATA_STRUCTURE.keys():
-        if len(db[serverID].keys()) < len(DATA_STRUCTURE.keys()):
-            db[serverID] = {**DATA_STRUCTURE, **db[serverID]}
-            print("Successfully updated database in {0.name}".format(guild))
-        elif len(db[serverID].keys()) >= len(DATA_STRUCTURE.keys()):
-            tempDict = db[serverID]
-            for key in db[serverID].keys():
-                if key not in DATA_STRUCTURE.keys():
-                    del tempDict[key]
-            db[serverID] = tempDict
-            print("Successfully updated database in {0.name}".format(guild))
-    return "Failed to update database in {0.name}".format(guild)
+    # Deprecated, pretty sure its unneeded with the new structure.
+    # elif serverID in db.keys() and db[serverID].keys() != DATA_STRUCTURE.keys():
+    #     if len(db[serverID].keys()) < len(DATA_STRUCTURE.keys()):
+    #         db[serverID] = {**DATA_STRUCTURE, **db[serverID]}
+    #         print("Successfully updated database in {0.name}".format(guild))
+    #     elif len(db[serverID].keys()) >= len(DATA_STRUCTURE.keys()):
+    #         tempDict = db[serverID]
+    #         for key in db[serverID].keys():
+    #             if key not in DATA_STRUCTURE.keys():
+    #                 del tempDict[key]
+    #         db[serverID] = tempDict
+    #         print("Successfully updated database in {0.name}".format(guild))
+    # return "Failed to update database in {0.name}".format(guild)
 
+#Updates the database with the given key.
+#Ex. passing key = "trigger_phrases" will appropriately update the trigger database for the given server
+def push_data(serverID, key : str):
+    try:
+        collections.update_one({"server_id": serverID}, {"$set": {key: db[serverID][key]}})
+    except Exception as e:
+        raise ConnectionError("Unable to connect to database")
 
 def delete_guild_entry(serverID):
-    if str(serverID) in db.keys():
-        del db[str(serverID)]
+    collections.delete_one({"server_id":serverID})
+    db[serverID].clear()
         
 
 def get_data(serverID):

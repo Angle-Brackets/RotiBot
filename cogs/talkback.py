@@ -1,11 +1,13 @@
 import discord
 import re
 import random
-from replit import db
+import interactions
 from discord.ext import commands
-from discord_slash import cog_ext, SlashContext, ComponentContext
-from discord_slash.utils.manage_components import create_button, create_actionrow, wait_for_component
-from discord_slash.model import ButtonStyle
+from discord_slash import cog_ext, SlashContext
+
+
+import data
+from data import db
 import asyncio
 import sys, os
 
@@ -13,44 +15,48 @@ import sys, os
 def _add_talkback_phrase(serverID, trigger_phrases, response_phrases):
         try:
             res = ""
-            t_data = db[str(serverID)]["trigger_phrases"]
-            r_data = db[str(serverID)]["response_phrases"]
-            trigger_list = re.split(r'\s+(?=[^"]*(?:"[^"]*"[^"]*)*$)',trigger_phrases)
+            t_data = db[serverID]["trigger_phrases"] #loads the current trigger data
+            r_data = db[serverID]["response_phrases"] #loads the current response data
+            trigger_list = re.split(r'\s+(?=[^"]*(?:"[^"]*"[^"]*)*$)',trigger_phrases) #separates entries by spaces, quotes are used to group items
+            response_list = re.split(r'\s+(?=[^"]*(?:"[^"]*"[^"]*)*$)',response_phrases) #see above
 
-            response_list = re.split(r'\s+(?=[^"]*(?:"[^"]*"[^"]*)*$)',response_phrases)
-            
 
             if len(trigger_list) > 10 or len(response_list) > 10:
                 return "Failed to create new talkback action (greater than 10 triggers or responses given)."
 
+            #deletes quotes
             for i in range(len(trigger_list)):
                 trigger_list[i] = trigger_list[i].replace("\"", "")
             for i in range(len(response_list)):
                 response_list[i] = response_list[i].replace("\"", "")
-            
+
             #lowercases everything
-            t_data = [ [ item.lower() for item in sublist ] for sublist in t_data] 
-            
+            t_data = [ [ item.lower() for item in sublist ] for sublist in t_data]
+
             #If a duplicate trigger is given, this loop attempts to merge the two response lists together since they share the same trigger.
             trigger_list_copy = trigger_list[:]
             for i in range(len(t_data)):
-                trigger_set = t_data[i]
-                
+                trigger_set = t_data[i] #particular set of triggers (max 10)
+
                 for j in range(len(trigger_list)):
                     if trigger_list[j].casefold() in trigger_set:
                         if len(response_list) + len(r_data[i]) > 10:
                             res += "Failed to merge duplicate trigger {0} due to response cap being exceeded.\n".format(trigger_list[j])
                             trigger_list_copy.remove(trigger_list[j])
-                            
+
                         else:
                             res += "Successfully merged trigger {0} with pre-existing talkback combo.\n".format(trigger_list[j])
                             trigger_list_copy.remove(trigger_list[j])
-                            db[str(serverID)]["response_phrases"][i] += response_list
-                            
+                            db[serverID]["response_phrases"][i] += response_list
+
             trigger_list = trigger_list_copy
-            
-            db[str(serverID)]["trigger_phrases"].append(trigger_list)
-            db[str(serverID)]["response_phrases"].append(response_list)
+
+            db[serverID]["trigger_phrases"].append(trigger_list)
+            db[serverID]["response_phrases"].append(response_list)
+
+            #Updates mongo database
+            data.push_data(serverID, "trigger_phrases")
+            data.push_data(serverID, "response_phrases")
 
             return "Successfully created new talkback." if not res else (res + "Successfully added new talkback.")
         except Exception as e:
@@ -67,13 +73,13 @@ def _add_talkback_phrase(serverID, trigger_phrases, response_phrases):
 #msg is the keyword given to the function to be used in the matching search.
 #list_enabled is for /talkback list, and prevents the matched triggers from being generated or returned to increase speed.
 def _generate_embed_and_triggers(guild, msg, list_enabled = False):
-    data = db[str(guild.id)]
+    data = db[guild.id]
     msg = msg.strip()
-    
+
     all_embeds = list() #If somehow it exceeds the 6000 character limit, this stores all the embeds that the list gets split at for multiple pages. Also handles if there are greater than 25 fields in an embed...which is more common.
 
     matched_triggers = list()
-    trigger_number = 1 #number of trigger in matched triggers
+    trigger_number = 1 #number of triggers in matched triggers
     empty_embed = None
 
     if list_enabled:
@@ -92,9 +98,9 @@ def _generate_embed_and_triggers(guild, msg, list_enabled = False):
         potential_res = ", ".join(data["response_phrases"][index])
 
         embed.add_field(name=potential_trigger, value=potential_res, inline=False)
-                    
+
         trigger_number += 1
-        
+
         if not list_enabled:
             matched_triggers.append(data["trigger_phrases"][index])
 
@@ -105,14 +111,14 @@ def _generate_embed_and_triggers(guild, msg, list_enabled = False):
             if msg.casefold() in data["trigger_phrases"][i][j].casefold().strip():
                 if (len(embed.fields) % 25 != 0 if len(embed.fields) > 0 else True) and len(embed) + len(''.join(data["trigger_phrases"][i])) < 5800:
                     _update_embed(embed, trigger_number, i)
-                    trigger_number += 1 
+                    trigger_number += 1
                 else:
                     all_embeds.append(embed)
 
                     embed = empty_embed.copy()
 
                     _update_embed(embed, trigger_number, i)
-                    
+
                     trigger_number += 1
                 break
 
@@ -120,7 +126,7 @@ def _generate_embed_and_triggers(guild, msg, list_enabled = False):
 
     if embed.fields == empty_embed.fields:
         embed.add_field(name="No potential trigger/response pairs found.", value="\uFEFF", inline=False)
-    
+
     all_embeds.append(embed)
 
     #Adds page numbers to the footer of each embed
@@ -138,7 +144,7 @@ class Talkback(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-   
+
     talkback_add_options = [
       {
          "name": "triggers",
@@ -175,11 +181,11 @@ class Talkback(commands.Cog):
     #This is the listener that actually responds with the appropriate response.
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author == self.bot.user or not db[str(message.guild.id)]["settings"]["talkback"]["enabled"]:
+        if message.author == self.bot.user or not db[message.guild.id]["settings"]["talkback"]["enabled"]:
             return
 
         msg = message.content
-        serverID = str(message.guild.id)
+        serverID = message.guild.id
         delete_duration = db[serverID]["settings"]["talkback"]["duration"]
         strict = db[serverID]["settings"]["talkback"]["strict"]
         probability = db[serverID]["settings"]["talkback"]["res_probability"] / 100
@@ -196,7 +202,7 @@ class Talkback(commands.Cog):
                             #If duration = 0 (negatives are banned), it is permanent.
                             await message.channel.send(random.choice(db[serverID]["response_phrases"][i]))
                         return
-                        
+
                     elif not strict and db[serverID]["trigger_phrases"][i][j].casefold().strip() in msg.casefold() and probability >= rand:
                         if delete_duration > 0:
                             #If duration > 0, it will delete after x seconds
@@ -206,14 +212,14 @@ class Talkback(commands.Cog):
                             await message.channel.send(random.choice(db[serverID]["response_phrases"][i]))
                         return
 
-    
-    
+
+
     @cog_ext.cog_subcommand(base="talkback", name="add", description="Add a new talkback pair. Spaces separate elements, use quotes to group phrases.", options=talkback_add_options)
     async def _talkback_add(self, ctx: SlashContext, triggers = str, responses = str):
         await ctx.defer()
         notif = _add_talkback_phrase(ctx.guild.id, str(triggers),str(responses))
         await ctx.send(notif)
-    
+
     @cog_ext.cog_subcommand(base="talkback", name="remove", description="Remove a current talkback trigger/response pair", options=talkback_remove_options)
     async def _talkback_remove(self, ctx: SlashContext, trigger = str):
         await ctx.defer()
@@ -221,7 +227,7 @@ class Talkback(commands.Cog):
         def check_reaction(reaction, user):
             return user == ctx.author and str(reaction.emoji) in ["◀️", "▶️", "❌"]
 
-        
+
         res = _generate_embed_and_triggers(ctx.guild, str(trigger))
         page, pages = 1, len(res[0]) #Subtract 1 for index!
 
@@ -231,7 +237,7 @@ class Talkback(commands.Cog):
             await msg.add_reaction("◀️")
             await msg.add_reaction("▶️")
         await msg.add_reaction("❌")
-        
+
         def check_message(m):
             return m.content.isnumeric() and int(m.content) <= len(res[1]) and m.channel == ctx.channel and m.author == ctx.author
 
@@ -244,28 +250,31 @@ class Talkback(commands.Cog):
         while True:
             try:
                 response = done.pop().result()
-                
+
                 if type(response) is discord.Message:
                     index = int(response.content)
-                    index = db[str(ctx.guild.id)]["trigger_phrases"].index(res[1][index-1])
+                    index = db[ctx.guild.id]["trigger_phrases"].index(res[1][index-1])
 
-                    t, r = db[str(ctx.guild.id)]["trigger_phrases"][index], db[str(ctx.guild.id)]["response_phrases"][index]
+                    t, r = db[ctx.guild.id]["trigger_phrases"][index], db[ctx.guild.id]["response_phrases"][index]
 
-                    del db[str(ctx.guild.id)]["trigger_phrases"][index]
-                    del db[str(ctx.guild.id)]["response_phrases"][index]
+                    #Deletes the data
+                    del db[ctx.guild.id]["trigger_phrases"][index]
+                    del db[ctx.guild.id]["response_phrases"][index]
+                    data.push_data(ctx.guild.id, "trigger_phrases")
+                    data.push_data(ctx.guild.id, "response_phrases")
 
-                    await ctx.send("Successfully deleted trigger/response pair: " + str(t.value)[1:-1] + "/" + str(r.value)[1:-1])
+                    await ctx.send("Successfully deleted trigger/response pair: " + str(t)[1:-1] + "/" + str(r)[1:-1])
                     await msg.delete()
                     break
-                    
+
                 elif type(response[0]) is discord.Reaction:
                     reaction = response[0]
                     user = response[1]
-                    
+
                     if str(reaction.emoji) == "▶️" and page is not pages:
                         page += 1
                         await msg.edit(embed=res[0][page-1])
-                        await msg.remove_reaction(reaction, user)    
+                        await msg.remove_reaction(reaction, user)
                     elif str(reaction.emoji) == "◀️" and page > 1:
                         page -= 1
                         await msg.edit(embed=res[0][page-1])
@@ -279,7 +288,7 @@ class Talkback(commands.Cog):
             except asyncio.TimeoutError or ...:
                 await msg.delete()
 
-                for future in done: 
+                for future in done:
                     future.exception()
 
                 for future in pending:
@@ -290,73 +299,31 @@ class Talkback(commands.Cog):
     async def _talkback_list(self, ctx: SlashContext, keyword = str):
         await ctx.defer()
 
-        if len(db[str(ctx.guild.id)]["trigger_phrases"]) == 0:
+        if len(db[ctx.guild.id]["trigger_phrases"]) == 0:
             await ctx.send("No talkbacks are currently present on this server.")
             return
-        
+
         def check_reaction(reaction, user):
             return user == ctx.author and str(reaction.emoji) in ["◀️", "▶️", "❌"]
 
         embeds = _generate_embed_and_triggers(ctx.guild, str(keyword) if not isinstance(keyword, type) else "", list_enabled=True)
 
         page, pages = 1, len(embeds) #Subtract 1 for index
-        #buttons = None
-
-		#anything commented out is for when they fix buttons -.-
-        # if pages > 1:
-        #     buttons = [
-        #         create_button(
-        #             style=1,
-        #             label="Next"
-        #         ),
-        #         create_button(
-        #             style=1,
-        #             label="Previous"
-        #         ),
-        #         create_button(
-        #             style=4,
-        #             label="Cancel"
-        #         )
-        #        ]
-        # else:
-        #     buttons = [
-        #         create_button(
-        #             style=4,
-        #             label="Cancel"
-        #         )
-        #        ]
 
         msg = await ctx.send(embed=embeds[page-1])
         if pages > 1:
             await msg.add_reaction("◀️")
             await msg.add_reaction("▶️")
         await msg.add_reaction("❌")
-          
-        #action_row = create_actionrow(*buttons)
 
         while True:
             try:
                 reaction, user = await self.bot.wait_for("reaction_add", timeout=60, check=check_reaction)
-            #     button_ctx : ComponentContext = await wait_for_component(self.bot, messages=msg)
-
-            #     choice = button_ctx.custom_id
-
-            #     if choice == "Next" and page is not pages:
-            #         page += 1
-            #         await msg.edit(embed=embeds[page-1], components=[action_row])
-            #     elif choice == "Previous" and page > 1:
-            #         page -= 1
-            #         await msg.edit(embed=embeds[page-1], components=[action_row])
-            #     else:
-            #         await msg.delete()
-
-            # except asyncio.TimeoutError:
-            #     await msg.delete()
 
                 if str(reaction.emoji) == "▶️" and page is not pages:
                     page += 1
                     await msg.edit(embed=embeds[page-1])
-                    await msg.remove_reaction(reaction, user)    
+                    await msg.remove_reaction(reaction, user)
                 elif str(reaction.emoji) == "◀️" and page > 1:
                     page -= 1
                     await msg.edit(embed=embeds[page-1])
@@ -367,7 +334,6 @@ class Talkback(commands.Cog):
                     break
                 else:
                     await msg.remove_reaction(reaction,user)
-
             except asyncio.TimeoutError:
                 await msg.delete()
 

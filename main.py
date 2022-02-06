@@ -1,17 +1,18 @@
-#ROTI BOT V1.01 ALPHA
-#BY SOUPA#0524, CURRENTLY WRITTEN IN PYTHON USING REPLIT DATABASE FOR DATA.
+#ROTI BOT V1.02 ALPHA
+#BY SOUPA#0524, CURRENTLY WRITTEN IN PYTHON USING MONGO DATABASE FOR DATA.
 
 import discord
 import os
 
+from dotenv import load_dotenv
 from data import *
-from webserver.keep_alive import keep_alive
 from discord.utils import find
 from discord.ext import commands
 from discord_slash import SlashCommand, SlashContext
 from cogs.motd import choose_motd
 
-token = os.environ['TOKEN']
+#load credentials
+load_dotenv(".env")
 
 client = commands.Bot(command_prefix="prefix")
 slash = SlashCommand(client, sync_commands=True, override_type=True)
@@ -20,9 +21,9 @@ slash = SlashCommand(client, sync_commands=True, override_type=True)
 async def on_ready():
     print("Roti Bot Online, logged in as {0.user}".format(client))
 
-    for guild in client.guilds:
-        update_database(guild)
-    
+    # for guild in client.guilds:
+    #     update_database(guild)
+
     await client.change_presence(activity=discord.Activity(name=choose_motd(), type=1))
 
 @client.event
@@ -80,10 +81,6 @@ async def on_message(message):
                 for channel in guild_list[j].text_channels:
                     if channel.permissions_for(guild.me).send_messages:
                         await channel.send(update)
-                
-
-        
-keep_alive()
 
 #registers all of the commands located in the cogs folder
 if __name__ == '__main__':
@@ -91,4 +88,4 @@ if __name__ == '__main__':
         if cog_file.endswith(".py"):
             client.load_extension("cogs.{0}".format(cog_file[0:cog_file.index(".py")]))
 
-client.run(token)
+client.run(os.getenv('TOKEN'))

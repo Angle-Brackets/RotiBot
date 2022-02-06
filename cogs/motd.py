@@ -2,7 +2,9 @@ import random
 import discord
 from discord.ext import commands, tasks
 from discord_slash import cog_ext, SlashContext
-from replit import db
+
+import data
+from data import db
 
 def choose_motd(current_motd = None):
 	keys = list(db.keys())
@@ -33,13 +35,14 @@ class Motd(commands.Cog):
 	@cog_ext.cog_subcommand(base="motd", name="add", description="Add a \"Message of the Day\" to the bot to be displayed in its status", options=motd_options)
 	async def _motd_add(self, ctx: SlashContext, motd = str):
 		await ctx.defer()
-		motd_entry = str(db[str(ctx.guild.id)]["motd"])
+		motd_entry = str(db[ctx.guild.id]["motd"])
 		
 
 		if len(motd) > 128:
 			await ctx.send(content="Failed to add given Message of the Day - Message exceeded max of 128 characters.")
 		else:
-			db[str(ctx.guild.id)]["motd"] = motd
+			db[ctx.guild.id]["motd"] = motd
+			data.push_data(ctx.guild.id, "motd")
 
 			#If the motd database entry is empty for a server
 			if motd_entry:
@@ -50,10 +53,11 @@ class Motd(commands.Cog):
 	@cog_ext.cog_subcommand(base="motd", name="clear", description="Removes the \"Message of the Day\" associated with this guild.")
 	async def _motd_remove(self, ctx: SlashContext):
 		await ctx.defer()
-		motd_entry = db[str(ctx.guild.id)]["motd"]
+		motd_entry = db[ctx.guild.id]["motd"]
 
 		if motd_entry:
-			db[str(ctx.guild.id)]["motd"] = ""
+			db[ctx.guild.id]["motd"] = ""
+			data.push_data(ctx.guild.id, "motd")
 			await ctx.send(content="Successfully cleared MOTD associated with this guild: {0}".format(motd_entry))
 		else:
 			await ctx.send(content="There is no MOTD associated with this server currently, add one using /motd add!")
@@ -61,8 +65,8 @@ class Motd(commands.Cog):
 	@cog_ext.cog_subcommand(base="motd", name="show", description="Shows the \"Message of the Day\" associated with this guild.")
 	async def _motd_show(self, ctx: SlashContext):
 		await ctx.defer()
-		if db[str(ctx.guild.id)]["motd"]:
-			await ctx.send(content="The current MOTD associated with this server is: \"{0}\"".format(db[str(ctx.guild.id)]["motd"]))
+		if db[ctx.guild.id]["motd"]:
+			await ctx.send(content="The current MOTD associated with this server is: \"{0}\"".format(db[ctx.guild.id]["motd"]))
 		else:
 			await ctx.send(content="There is no MOTD associated with this server currently, add one using /motd add!")
 
