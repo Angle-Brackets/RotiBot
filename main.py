@@ -1,4 +1,4 @@
-#ROTI BOT V1.02 ALPHA
+#ROTI BOT V1.05 ALPHA
 #BY SOUPA#0524, CURRENTLY WRITTEN IN PYTHON USING MONGO DATABASE FOR DATA.
 
 import discord
@@ -81,6 +81,7 @@ async def on_message(message):
                 for channel in guild_list[j].text_channels:
                     if channel.permissions_for(guild.me).send_messages:
                         await channel.send(update)
+
 
 #registers all of the commands located in the cogs folder
 if __name__ == '__main__':
