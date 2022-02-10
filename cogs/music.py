@@ -1,3 +1,4 @@
+import inspect
 import os
 import discord
 import wavelink
@@ -38,11 +39,24 @@ class Music(commands.Cog):
             password=os.getenv("MUSIC_PASS")
         )
 
-#Need to add handling disconnects as the bot bugs out
     @commands.Cog.listener()
     async def on_wavelink_node_ready(self, node: wavelink.Node):
         print(f'Node: <{node.identifier}> is ready!')
 
+    #Handles disconnecting
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        if before.channel is not None and after.channel is None:
+            if len(before.channel.members) >= 1:
+                for connected in before.channel.members:
+                    if not connected.bot:
+                        return  # Exits the loop as there are members that are still in the channel that aren't bots
+
+                # Will now disconnect and clear queue
+                vc: wavelink.Player = discord.utils.get(self.bot.voice_clients, guild=before.channel.guild)
+                await vc.stop()
+                vc.queue.reset()
+                await vc.disconnect()
 
     @cog_ext.cog_slash(name="join", description="Makes the bot join a valid voice channel.")
     async def _join(self, ctx : SlashContext):
@@ -69,6 +83,7 @@ class Music(commands.Cog):
                 vc: wavelink.Player = ctx.voice_client
         except Exception as e:
             await ctx.send("Unable to join channel, please specify a valid channel or join one.")
+            return
 
         track = await wavelink.YouTubeTrack.search(query=video, return_first=True)
         await vc.play(track)
