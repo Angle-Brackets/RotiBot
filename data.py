@@ -47,6 +47,7 @@ def update_database(guild):
         temp = DATA_STRUCTURE
         temp['server_id'] = serverID
         collections.insert_one(temp)
+        db[serverID] = temp
         return "Successfully created database entry for {0.name}. Have fun!".format(guild)
 
     # Deprecated, pretty sure its unneeded with the new structure.
