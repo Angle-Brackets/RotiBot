@@ -17,7 +17,7 @@ def _is_connected(ctx):
 
 def _generate_queue_embed(vc : wavelink.Player):
     queue = vc.queue
-    embed = discord.Embed(title="Music Queue:", description=f"Currently playing: {queue.__getitem__(0)}", color=0xecc98e)
+    embed = discord.Embed(title="Music Queue:", description="Currently playing: {0} [{1}/{2}]".format(queue.__getitem__(0), time.strftime("%H:%M:%S", time.gmtime(vc.position)), time.strftime("%H:%M:%S", time.gmtime(queue.__getitem__(0).duration))), color=0xecc98e)
 
     for i in range(len(queue)):
         embed.add_field(name="{0}. {1} - [{2}]".format(i + 1, queue.__getitem__(i), time.strftime("%H:%M:%S", time.gmtime(queue.__getitem__(i).duration))), value='\u200b', inline=False)
