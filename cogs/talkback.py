@@ -1,7 +1,6 @@
 import discord
 import re
 import random
-import interactions
 from discord.ext import commands
 from discord_slash import cog_ext, SlashContext
 
@@ -19,7 +18,6 @@ def _add_talkback_phrase(serverID, trigger_phrases, response_phrases):
             r_data = db[serverID]["response_phrases"] #loads the current response data
             trigger_list = re.split(r'\s+(?=[^"]*(?:"[^"]*"[^"]*)*$)',trigger_phrases) #separates entries by spaces, quotes are used to group items
             response_list = re.split(r'\s+(?=[^"]*(?:"[^"]*"[^"]*)*$)',response_phrases) #see above
-
 
             if len(trigger_list) > 10 or len(response_list) > 10:
                 return "Failed to create new talkback action (greater than 10 triggers or responses given)."
@@ -93,12 +91,22 @@ def _generate_embed_and_triggers(guild, msg, list_enabled = False):
     embed = empty_embed.copy()
 
     def _update_embed(embed, trigger_number, index):
-        potential_trigger = "[{0}] ".format(trigger_number) + ", ".join(data["trigger_phrases"][index])
+        #This must be capped at 256 characters for field name (triggers) and 1024 for field values (responses) to avoid a crash
+        potential_trigger = "[{0}] ".format(trigger_number)
+        trigger_display = ", ".join(data["trigger_phrases"][index])
 
+        #This will truncate triggers to 256 chars total.
+        if len(potential_trigger) + len(trigger_display) > 256:
+            trigger_display = trigger_display[:253] + "..."
+        potential_trigger = potential_trigger + trigger_display
+
+        #Similar idea for responses, must cap at 1024
         potential_res = ", ".join(data["response_phrases"][index])
 
-        embed.add_field(name=potential_trigger, value=potential_res, inline=False)
+        if len(potential_res) > 1024:
+            potential_res = potential_res[:1021] + "..."
 
+        embed.add_field(name=potential_trigger, value=potential_res, inline=False)
         trigger_number += 1
 
         if not list_enabled:
@@ -109,7 +117,7 @@ def _generate_embed_and_triggers(guild, msg, list_enabled = False):
     for i in range(len(data["trigger_phrases"])):
         for j in range(len(data["trigger_phrases"][i])):
             if msg.casefold() in data["trigger_phrases"][i][j].casefold().strip():
-                if (len(embed.fields) % 25 != 0 if len(embed.fields) > 0 else True) and len(embed) + len(''.join(data["trigger_phrases"][i])) < 5800:
+                if (len(embed.fields) % 25 != 0 if len(embed.fields) > 0 else True) and len(embed) + len(''.join(data["trigger_phrases"][i])) < 5000:
                     _update_embed(embed, trigger_number, i)
                     trigger_number += 1
                 else:
@@ -226,7 +234,6 @@ class Talkback(commands.Cog):
 
         def check_reaction(reaction, user):
             return user == ctx.author and str(reaction.emoji) in ["◀️", "▶️", "❌"]
-
 
         res = _generate_embed_and_triggers(ctx.guild, str(trigger))
         page, pages = 1, len(res[0]) #Subtract 1 for index!
