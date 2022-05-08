@@ -1,14 +1,15 @@
+import enum
+import typing
+
 import discord
 import re
-import random
-from discord.ext import commands
-from discord_slash import cog_ext, SlashContext
-
-
 import data
+import os, sys
+import random
+
 from data import db
-import asyncio
-import sys, os
+from discord.ext import commands
+from discord import app_commands
 
 #Adds new talkbacks, also automerges talkbacks if a duplicate trigger is given.
 def _add_talkback_phrase(serverID, trigger_phrases, response_phrases):
@@ -70,7 +71,7 @@ def _add_talkback_phrase(serverID, trigger_phrases, response_phrases):
 #serverID is the serverID
 #msg is the keyword given to the function to be used in the matching search.
 #list_enabled is for /talkback list, and prevents the matched triggers from being generated or returned to increase speed.
-def _generate_embed_and_triggers(guild, msg, list_enabled = False):
+def _generate_embed_and_triggers(guild, msg = "", list_enabled = False):
     data = db[guild.id]
     msg = msg.strip()
 
@@ -130,8 +131,6 @@ def _generate_embed_and_triggers(guild, msg, list_enabled = False):
                     trigger_number += 1
                 break
 
-
-
     if embed.fields == empty_embed.fields:
         embed.add_field(name="No potential trigger/response pairs found.", value="\uFEFF", inline=False)
 
@@ -148,45 +147,12 @@ def _generate_embed_and_triggers(guild, msg, list_enabled = False):
 def _strict_match(trigger, msg):
     return len(re.findall('\\b' + trigger + '\\b', msg.casefold(), flags=re.IGNORECASE)) > 0
 
-class Talkback(commands.Cog):
-    def __init__(self, bot):
+
+class Talkback(commands.GroupCog, group_name="talkback"):
+    def __init__(self, bot : commands.Bot):
+        super().__init__()
         self.bot = bot
 
-
-    talkback_add_options = [
-      {
-         "name": "triggers",
-         "description": "The words/phrases that activate the bot.",
-         "required": True,
-         "type": 3,
-      },
-      {
-         "name": "responses",
-         "description": "The words/phrases that the bot responds with.",
-         "required": True,
-         "type": 3
-      }
-   ]
-
-    talkback_remove_options = [
-       {
-           "name": "trigger",
-           "description": "A word or phrase that is identical or similar to one in a talkback action.",
-           "required": True,
-           "type": 3,
-       },
-   ]
-
-    talkback_list_options = [
-       {
-            "name": "keyword",
-            "description": "Keyword for finding a specific talkback pair, must be a trigger phrase.",
-            "required": False,
-            "type": 3
-       }
-   ]
-
-    #This is the listener that actually responds with the appropriate response.
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author == self.bot.user or not db[message.guild.id]["settings"]["talkback"]["enabled"]:
@@ -220,129 +186,136 @@ class Talkback(commands.Cog):
                             await message.channel.send(random.choice(db[serverID]["response_phrases"][i]))
                         return
 
+    @app_commands.command(name="add", description="Add a new talkback pair. Spaces separate elements, use quotes to group phrases.")
+    async def _talkback_add(self, interaction : discord.Interaction, triggers : str, responses : str):
+        await interaction.response.defer()
+        notif = _add_talkback_phrase(interaction.guild_id, str(triggers), str(responses))
+        await interaction.followup.send(notif)
 
+    @app_commands.command(name="remove", description="Remove a current talkback trigger/response pair")
+    async def _talkback_remove(self, interaction : discord.Interaction, trigger : typing.Optional[str]):
+        await interaction.response.defer()
 
-    @cog_ext.cog_subcommand(base="talkback", name="add", description="Add a new talkback pair. Spaces separate elements, use quotes to group phrases.", options=talkback_add_options)
-    async def _talkback_add(self, ctx: SlashContext, triggers = str, responses = str):
-        await ctx.defer()
-        notif = _add_talkback_phrase(ctx.guild.id, str(triggers),str(responses))
-        await ctx.send(notif)
+        res = _generate_embed_and_triggers(interaction.guild, str(trigger) if trigger is not None else "")
+        page, pages = 1, len(res[0])
+        view = Navigation(pages, res, True)
 
-    @cog_ext.cog_subcommand(base="talkback", name="remove", description="Remove a current talkback trigger/response pair", options=talkback_remove_options)
-    async def _talkback_remove(self, ctx: SlashContext, trigger = str):
-        await ctx.defer()
+        view.message = await interaction.followup.send(embed=res[0][page-1], view=view)
+        view.message = await interaction.original_message()
 
-        def check_reaction(reaction, user):
-            return user == ctx.author and str(reaction.emoji) in ["◀️", "▶️", "❌"]
+        await view.wait()
 
-        res = _generate_embed_and_triggers(ctx.guild, str(trigger))
-        page, pages = 1, len(res[0]) #Subtract 1 for index!
-
-        msg = await ctx.send(embed=res[0][page-1])
-
-        if pages > 1:
-            await msg.add_reaction("◀️")
-            await msg.add_reaction("▶️")
-        await msg.add_reaction("❌")
-
-        def check_message(m):
-            return m.content.isnumeric() and int(m.content) <= len(res[1]) and m.channel == ctx.channel and m.author == ctx.author
-
-        done, pending = await asyncio.wait([
-            self.bot.wait_for('message', timeout=60, check=check_message),
-            self.bot.wait_for('reaction_add', timeout=60, check=check_reaction)
-        ], return_when=asyncio.FIRST_COMPLETED
-        )
-
-        while True:
-            try:
-                response = done.pop().result()
-
-                if type(response) is discord.Message:
-                    index = int(response.content)
-                    index = db[ctx.guild.id]["trigger_phrases"].index(res[1][index-1])
-
-                    t, r = db[ctx.guild.id]["trigger_phrases"][index], db[ctx.guild.id]["response_phrases"][index]
-
-                    #Deletes the data
-                    del db[ctx.guild.id]["trigger_phrases"][index]
-                    del db[ctx.guild.id]["response_phrases"][index]
-                    data.push_data(ctx.guild.id, "trigger_phrases")
-                    data.push_data(ctx.guild.id, "response_phrases")
-
-                    await ctx.send("Successfully deleted trigger/response pair: " + str(t)[1:-1] + "/" + str(r)[1:-1])
-                    await msg.delete()
-                    break
-
-                elif type(response[0]) is discord.Reaction:
-                    reaction = response[0]
-                    user = response[1]
-
-                    if str(reaction.emoji) == "▶️" and page is not pages:
-                        page += 1
-                        await msg.edit(embed=res[0][page-1])
-                        await msg.remove_reaction(reaction, user)
-                    elif str(reaction.emoji) == "◀️" and page > 1:
-                        page -= 1
-                        await msg.edit(embed=res[0][page-1])
-                        await msg.remove_reaction(reaction,user)
-                    elif str(reaction.emoji) == "❌":
-                        await msg.remove_reaction(reaction.emoji, self.bot.user)
-                        await msg.delete()
-                        break
-                    else:
-                        await msg.remove_reaction(reaction,user)
-            except asyncio.TimeoutError or ...:
-                await msg.delete()
-
-                for future in done:
-                    future.exception()
-
-                for future in pending:
-                    future.cancel()
-                break
-
-    @cog_ext.cog_subcommand(base="talkback", name="list", description="Lists all talkback pairs present in server.", options=talkback_list_options)
-    async def _talkback_list(self, ctx: SlashContext, keyword = str):
-        await ctx.defer()
-
-        if len(db[ctx.guild.id]["trigger_phrases"]) == 0:
-            await ctx.send("No talkbacks are currently present on this server.")
+    @app_commands.command(name="list", description="Lists all talkback pairs present in server.")
+    async def _talkback_list(self, interaction : discord.Interaction, keyword : typing.Optional[str]):
+        await interaction.response.defer()
+        if len(db[interaction.guild_id]["trigger_phrases"]) == 0:
+            await interaction.response.send_message("No talkbacks are currently present on this server.")
             return
 
-        def check_reaction(reaction, user):
-            return user == ctx.author and str(reaction.emoji) in ["◀️", "▶️", "❌"]
-
-        embeds = _generate_embed_and_triggers(ctx.guild, str(keyword) if not isinstance(keyword, type) else "", list_enabled=True)
+        embeds = _generate_embed_and_triggers(interaction.guild, str(keyword) if keyword is not None else "", list_enabled=True)
 
         page, pages = 1, len(embeds) #Subtract 1 for index
+        view = Navigation(pages, embeds, False) #Only if pages > 1 will the navigation buttons appear.
 
-        msg = await ctx.send(embed=embeds[page-1])
-        if pages > 1:
-            await msg.add_reaction("◀️")
-            await msg.add_reaction("▶️")
-        await msg.add_reaction("❌")
+        view.message = await interaction.followup.send(embed=embeds[page-1], view=view)
+        view.message = await interaction.original_message() #If I needed it in the button class
 
-        while True:
-            try:
-                reaction, user = await self.bot.wait_for("reaction_add", timeout=60, check=check_reaction)
+        await view.wait()
 
-                if str(reaction.emoji) == "▶️" and page is not pages:
-                    page += 1
-                    await msg.edit(embed=embeds[page-1])
-                    await msg.remove_reaction(reaction, user)
-                elif str(reaction.emoji) == "◀️" and page > 1:
-                    page -= 1
-                    await msg.edit(embed=embeds[page-1])
-                    await msg.remove_reaction(reaction,user)
-                elif str(reaction.emoji) == "❌":
-                    await msg.remove_reaction(reaction.emoji, self.bot.user)
-                    await msg.delete()
-                    break
-                else:
-                    await msg.remove_reaction(reaction,user)
-            except asyncio.TimeoutError:
-                await msg.delete()
+#States for the button.
+class ButtonState(enum.Enum):
+    BACK = 1
+    NEXT = 2
+    CANCEL = 3
 
-def setup(bot):
-    bot.add_cog(Talkback(bot))
+#Used to generate the options for the dropdown to use, will only display the max of 25, and will update when page is changed.
+def generate_options(current_page, embed_list, fields):
+    temp = list()
+    start = len(fields[current_page - 2].fields) if current_page > 1 else 0
+    for i in range(start, start + len(fields[current_page - 1].fields)):
+        print(i)
+        temp.append(discord.SelectOption(label=f"Talkback #{i + 1}", description=", ".join(embed_list[i])))
+    return temp
+
+class Navigation(discord.ui.View):
+    def __init__(self, pages : int, embed_list : list, trigger_list : False):
+        super().__init__()
+        self.value = None
+        self.timeout = 60
+        self.embed_list = embed_list #list of the embeds so we don't reload them unnecessarily
+        self.pages = pages
+        self.current_page = 1 #Subtract 1 for indexing.
+        self.remove_item(self._talkback_rm_input)
+
+        if not trigger_list:
+            self.remove_mode = False
+            self.remove_item(self._talkback_rm_input)
+        else:
+            self.remove_mode = True
+
+        if self.remove_mode:
+            self.add_item(self._talkback_rm_input)
+            self._talkback_rm_input.options = generate_options(self.current_page, self.embed_list[1], self.embed_list[0])
+
+        if not pages > 1:
+            self.remove_item(self._back)
+            self.remove_item(self._next)
+        #To figure out if we are in the /talkback remove command
+
+
+    async def on_timeout(self) -> None:
+        await self.message.delete()
+        self.stop()
+
+    @discord.ui.button(label='Back', style=discord.ButtonStyle.primary)
+    async def _back(self, interaction : discord.Interaction, button : discord.ui.Button):
+        if self.current_page > 1:
+            self.value = ButtonState.BACK
+            self.current_page -= 1
+
+            # This is used in order to detect whether I should update the dropdown menu on a page swap
+            if self.remove_mode:
+                self._talkback_rm_input.options = generate_options(self.current_page, self.embed_list[1], self.embed_list[0])
+                await interaction.response.edit_message(embed=self.embed_list[0][self.current_page - 1], view=self)
+            else:
+                await interaction.response.edit_message(embed=self.embed_list[self.current_page-1])
+
+    @discord.ui.button(label='Next', style=discord.ButtonStyle.primary)
+    async def _next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_page is not self.pages:
+            self.value = ButtonState.NEXT
+            self.current_page += 1
+
+            # This is used in order to detect whether I should update the dropdown menu on a page swap
+            if self.remove_mode:
+                self._talkback_rm_input.options = generate_options(self.current_page, self.embed_list[1], self.embed_list[0])
+                await interaction.response.edit_message(embed=self.embed_list[0][self.current_page-1], view=self)
+            else:
+                await interaction.response.edit_message(embed=self.embed_list[self.current_page-1])
+
+    @discord.ui.button(label='Cancel', style=discord.ButtonStyle.danger)
+    async def _cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = ButtonState.CANCEL
+        await self.message.delete()
+        self.stop()
+
+    #The options are dynamically generated when a page flip occurs.
+    @discord.ui.select(min_values=1, options=[], placeholder="Select a Talkback")
+    async def _talkback_rm_input(self, interaction : discord.Interaction, selection : discord.ui.Select):
+        index = int(selection.values[0][selection.values[0].index("#") + 1:]) #Gets the corresponding index to remove.
+        index = db[interaction.guild_id]["trigger_phrases"].index(self.embed_list[1][index-1])
+
+        t, r = db[interaction.guild_id]["trigger_phrases"][index], db[interaction.guild_id]["response_phrases"][index]
+
+        #Deletes the data
+        del db[interaction.guild_id]["trigger_phrases"][index]
+        del db[interaction.guild_id]["response_phrases"][index]
+        data.push_data(interaction.guild_id, "trigger_phrases")
+        data.push_data(interaction.guild_id, "response_phrases")
+
+        await interaction.response.send_message(content="Successfully deleted trigger/response pair: " + str(t)[1:-1] + "/" + str(r)[1:-1])
+        await self.message.delete()
+        self.stop()
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(Talkback(bot))
