@@ -233,7 +233,6 @@ def generate_options(current_page, embed_list, fields):
     temp = list()
     start = len(fields[current_page - 2].fields) if current_page > 1 else 0
     for i in range(start, start + len(fields[current_page - 1].fields)):
-        print(i)
         temp.append(discord.SelectOption(label=f"Talkback #{i + 1}", description=", ".join(embed_list[i])))
     return temp
 

@@ -42,7 +42,7 @@ class Music(commands.Cog):
             bot=self.bot,
             host=os.getenv("MUSIC_IP"),
             port=2333,
-            password=os.getenv("MUSIC_PASS")
+            password=os.getenv("MUSIC_PASS"),
         )
 
     @commands.Cog.listener()
@@ -100,8 +100,8 @@ class Music(commands.Cog):
                 await interaction.followup.send(f"Successfully moved to `{interaction.user.voice.channel}`!")
 
     @app_commands.command(name="play", description="Play audio from a URL or from a search query.")
-    @app_commands.describe(video="A valid Youtube URL or Query.")
-    async def _play(self, interaction : discord.Interaction, *, video : str):
+    @app_commands.describe(query="A valid Youtube URL or Query.")
+    async def _play(self, interaction : discord.Interaction, *, query : str):
         await interaction.response.defer()
         try:
             if not interaction.guild.voice_client:
@@ -114,7 +114,7 @@ class Music(commands.Cog):
             await interaction.followup.send("Unable to join channel, please specify a valid channel or join one.")
             return
 
-        track = await wavelink.YouTubeTrack.search(query=video, return_first=True)
+        track = await wavelink.YouTubeTrack.search(query=query, return_first=True)
         #Will add queue interaction and pause checking soon
         if not vc.queue.is_empty:
             vc.queue.put(track)
@@ -186,7 +186,7 @@ class Music(commands.Cog):
     async def _queue(self, interaction : discord.Interaction):
         await interaction.response.defer()
         if interaction.user.voice is None or not interaction.guild.voice_client:
-            await interaction.followup.send("I'm not in a voice channel!")
+            await interaction.followup.send("You're not in a voice channel!")
         else:
             vc : wavelink.Player = interaction.guild.voice_client
             if not vc.queue.is_empty:

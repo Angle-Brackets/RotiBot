@@ -1,0 +1,145 @@
+{
+  "Talkbacks": {
+    "title": "Help for the /talkback command.",
+    "description": "Allows Roti to respond to phrases or quotes spoken by users.\n\nFor example: If Roti was given a talkback trigger of \"dog\" and was set to give a response of \"Good boy!\", then whenever a user says the word \"dog\", Roti will respond with \"Good boy!\" accordingly.\n\nWhen matching talkback triggers, Roti **ignores capitalization**, but will maintain the same capitalization in its response phrases.",
+    "command_base": "talkback",
+    "emoji": ":mega:",
+    "commands": {
+      "add": {
+        "description": "Creates a new talkback pair.",
+        "usage": "/talkback add [triggers] [responses]",
+        "arguments": {
+          "triggers": "Space separated list of words or phrases to activate Roti to say a talkback response. Each entry is space-separated, and can be grouped with double quotes (\"\"). Maximum of 10 triggers allowed per-talkback pair.",
+          "responses": "Space separated list of words or phrases that Roti will randomly respond with from the corresponding response pool. Each entry is space-separated, and can be grouped with double quotes (\"\"). Maximum of 10 responses allowed per-talkback pair."
+        }
+      },
+      "remove": {
+        "description": "Removes a talkback pair, select from the dropdown to remove a particular talkback.",
+        "usage": "/talkback remove <trigger>",
+        "arguments": {
+          "trigger": "**OPTIONAL** trigger keyword to search for in the pool of all talkbacks, helps to narrow search."
+        }
+      },
+      "list": {
+        "description": "Lists all talkbacks in a guild.",
+        "usage": "/talkback list <trigger>",
+        "arguments": {
+          "trigger": "**OPTIONAL** trigger keyword to search for in the pool of all talkbacks, helps to narrow search."
+        }
+      }
+    }
+  },
+  "MOTD": {
+    "title": "Help for the /motd command",
+    "description": "Allows for a new status to be added to Roti to be displayed globally (One per server).",
+    "command_base": "motd",
+    "emoji": ":date:",
+    "commands": {
+      "add": {
+        "description": "Adds a new MOTD/Status to Roti that can be randomly selected from the pool of all statuses every 3 hours.",
+        "usage": "/motd add [motd]",
+        "arguments": {
+          "motd": "The new status to be potentially displayed in Roti's status (must be less than 128 characters)."
+        }
+      },
+      "clear": {
+        "description": "Removes the MOTD/status associated with this guild.",
+        "usage": "/motd clear",
+        "arguments": "None"
+      },
+      "show": {
+        "description": "Displays the current MOTD/Status associated with this guild.",
+        "usage": "/motd show",
+        "arguments": "None"
+      }
+    }
+  },
+  "Music": {
+    "title": "Help for all of the music commands.",
+    "description": "Allows for Roti to play, pause, and queue music in a voice channel.",
+    "command_base": "None",
+    "emoji": ":notes:",
+    "commands": {
+      "join": {
+        "description": "Forces Roti to connect to the current voice channel of the user that activated the command.",
+        "usage": "/join (must be in a voice channel)",
+        "arguments": "None"
+      },
+      "disconnect": {
+        "description": "Disconnects Roti from the current voice channel.",
+        "usage": "/disconnect (must be in a voice channel)",
+        "arguments": "None"
+      },
+     "play": {
+       "description": "If the queue is empty, plays a new song, otherwise adds it to the queue.",
+       "usage": "/play [query] (must be in a voice channel)",
+       "arguments": {
+         "query": "A Youtube video or stream to be played by Roti."
+       }
+     },
+     "queue": {
+       "description": "Displays the current state of the music queue and the current song's remaining time. Queue is cleared when Roti is disconnected or when all users disconnect from a voice channel.",
+       "usage": "/queue (must be in a voice channel)",
+       "arguments": "None"
+     },
+     "pause": {
+       "description": "Pauses Roti and the Queue.",
+       "usage": "/pause (must be in a voice channel)",
+       "arguments": "None"
+     },
+      "resume": {
+        "description": "Resumes Roti if it was paused.",
+        "usage": "/resume (must be in a voice channel)",
+        "arguments": "None"
+      },
+      "skip": {
+        "description": "Skips the current song Roti is playing.",
+        "usage": "/skip (must be in a voice channel)",
+        "arguments": "None"
+      },
+      "loop": {
+        "description": "Allows for the current song to be looped indefinitely.",
+        "usage": "/loop [mode] (must be in a voice channel)",
+        "arguments": {
+          "mode": "Enable/Disable whether Roti is looping the current song."
+        }
+      }
+    }
+  },
+  "Settings": {
+    "title": "Help for all of the settings commands",
+    "description": "Allows for specific behaviors of Roti to be customized.",
+    "command_base": "settings",
+    "emoji": ":gear:",
+    "commands": {
+      "talkback enable": {
+        "description": "Toggles whether Roti will respond to talkback pairs.",
+        "usage": "/settings talkback enable <state>",
+        "arguments": {
+          "state": "**OPTIONAL** argument to change whether Roti will respond to talkback triggers. If no argument is given it will return the current state."
+        }
+      },
+      "talkback strict": {
+        "description": "Toggles whether Roti will be \"strict\" with talkbacks, effectively only responding to EXACT matches rather than substrings of statements.\nExample: If not enabled, Roti would potentially respond to a talkback trigger of \"dog\" when the word \"doge\" was said, as it contains the word \"dog\" in it. If enabled, Roti would only respond to when the word \"dog\" was explicitly said.",
+        "usage": "/settings talkback strict <state>",
+        "arguments": {
+          "state": "**OPTIONAL** argument to change whether Roti will be strict with matching talkback triggers. If no argument is given it will return the current state."
+        }
+      },
+      "talkback duration": {
+        "description": "Sets the amount of time it takes for a talkback response by Roti to be automatically deleted.",
+        "usage": "/settings talkback duration <length>",
+        "arguments": {
+          "length": "**OPTIONAL** argument to set the time frame a talkback response will remain in chat. If set to zero, talkback responses will remain permanently in chat. If no argument is given it will return the given state."
+        }
+      },
+      "talkback probability": {
+        "description": "Sets the probability that Roti will respond to a talkback trigger with a response",
+        "usage": "/settings talkback probability <probability>",
+        "arguments": {
+          "probability": "**OPTIONAL** argument to set the probability (an integer from 0 to 100) Roti will respond to a talkback trigger. If no argument is given it will return the current state."
+        }
+      }
+    }
+  }
+}

@@ -1,12 +1,16 @@
 import os
+import time
+
 from pymongo import MongoClient
 from dotenv import load_dotenv
+from time import strftime, gmtime
 
 load_dotenv(".env")
 cluster = MongoClient(os.getenv('DATABASE'))
 
 collections = cluster["Roti"]["data"]  # Actual MongoDB database
 db = dict()  # quick access to data, but must be updated when values changed
+bot_start_time = time.time()  # Used to calculate the uptime for the bot.
 
 # Takes data, puts into variable named db and keys the data using the serverID
 for data in collections.find({}):
@@ -66,3 +70,7 @@ def delete_guild_entry(serverID):
 
 def get_data(serverID):
     return db[str(serverID)]
+
+
+def calculate_uptime():
+    return strftime("%H:%M:%S", gmtime(time.time() - bot_start_time))

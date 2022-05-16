@@ -1,18 +1,12 @@
-#ROTI BOT V1.2 ALPHA
+#ROTI BOT V1.3 ALPHA
 #BY SOUPA#0524, CURRENTLY WRITTEN IN PYTHON USING MONGO DATABASE FOR DATA.
 #Currently uses discord.py 2.0, which must be manually installed from the git.
-import asyncio
-
 import discord
 import aiohttp
 import os
 
 from dotenv import load_dotenv
-from data import *
-from discord.utils import find
-from discord import app_commands
 from discord.ext import commands
-#from cogs.motd import choose_motd
 
 #load credentials
 load_dotenv(".env")
