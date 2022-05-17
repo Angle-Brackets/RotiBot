@@ -141,5 +141,25 @@
         }
       }
     }
+  },
+  "Wikipedia": {
+    "title": "Help for all of the Wikipedia commands",
+    "description": "Allows for finding random or specific Wikipedia articles.",
+    "command_base": "wikipedia",
+    "emoji": ":books:",
+    "commands": {
+      "random": {
+        "description": "Generates a random Wikipedia article. (This might take awhile, be patient!)",
+        "usage": "/wikipedia random",
+        "arguments": "None"
+      },
+      "search": {
+        "description": "Searches for a wikipedia article from a given query. If no exact/near match is found, Roti will generate 25 potential pages you might be interested in, and can select from the dropdown provided. (This might take awhile, be patient!)",
+        "usage": "/wikipedia search [query]",
+        "arguments": {
+          "query": "The name of the wikipedia article to be searched for."
+        }
+      }
+    }
   }
 }

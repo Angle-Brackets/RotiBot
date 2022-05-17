@@ -1,6 +1,7 @@
-#ROTI BOT V1.3 ALPHA
+#ROTI BOT V1.4 ALPHA
 #BY SOUPA#0524, CURRENTLY WRITTEN IN PYTHON USING MONGO DATABASE FOR DATA.
 #Currently uses discord.py 2.0, which must be manually installed from the git.
+
 import discord
 import aiohttp
 import os
@@ -10,13 +11,13 @@ from discord.ext import commands
 
 #load credentials
 load_dotenv(".env")
-
+test_build = False
 class Roti(commands.Bot):
     def __init__(self):
         super().__init__(
             command_prefix = "prefix",
             intents = discord.Intents.all(),
-            application_id = os.getenv('APPLICATION_ID')
+            application_id = os.getenv('APPLICATION_ID') if not test_build else os.getenv('TEST_APPLICATION_ID')
         )
 
     async def on_ready(self):
@@ -35,4 +36,4 @@ class Roti(commands.Bot):
         await self.session.close()
 
 roti = Roti()
-roti.run(os.getenv('TOKEN'))
+roti.run(os.getenv('TOKEN') if not test_build else os.getenv('TEST_TOKEN'))

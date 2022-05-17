@@ -27,7 +27,7 @@ def _generate_help_embed(command = None):
             embed = discord.Embed(title="Roti's Commands", description="Choose a category from the dropdown below", color=0xecc98e)
             embed.add_field(name="General Information", value="Uptime: ``{0}``\nRoti currently has ``{1}`` categories available, with a total of ``{2}`` commands available!".format(calculate_uptime(), len(help_information), sum(len(value["commands"]) for key, value in help_information.items())), inline=False)
             embed.add_field(name="Categories", value="\n".join("``/help " + category + "`` | " + category + " " + str(help_information[category]["emoji"]) for category in help_information.keys()), inline=False)
-            embed.set_footer(text="By Soupa#0524")
+            embed.add_field(name="Additional Information", value="By Soupa#0524 | [Github](https://github.com/Angle-Brackets/RotiBot)")
             return embed
 
         # This generates the main page that houses all of the sub-commands.
