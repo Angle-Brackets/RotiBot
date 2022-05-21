@@ -24,6 +24,7 @@ DATA_STRUCTURE = {
     "banned_phrases": [],
     "trigger_phrases": [],
     "response_phrases": [],
+    "quotes": [],
     "motd": "",
     "music_queue": [],  # I would like to use a queue here..but there is a circular logic error that stops me
     "settings": {
