@@ -261,7 +261,6 @@ class Navigation(discord.ui.View):
             self.remove_item(self._next)
         #To figure out if we are in the /talkback remove command
 
-
     async def on_timeout(self) -> None:
         await self.message.delete()
         self.stop()
