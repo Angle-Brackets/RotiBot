@@ -11,10 +11,18 @@ from enum import Enum
 Contains all of the help information for every command, loaded on start-up.
 """
 help_information = None
-#Loads all of the help data.
+changelog = None
+
+#Loads all the help and changelog data.
 with open("help_information.json") as file:
     data = file.read()
     help_information = json.loads(data)
+    file.close()
+
+with open("changelog") as file:
+    data = file.read()
+    changelog = json.loads(data)
+    file.close()
 
 # Generates all of the embeds for the help function...yeah sorry for the clutter, I wanted to have somewhat compressed code because most of it is string stuff.
 def _generate_help_embed(command = None):
@@ -53,6 +61,16 @@ def _generate_help_embed(command = None):
     else:
         return _generate_pages()
 
+def _generate_changelog_embed():
+    embed = discord.Embed(title="Changelog for Roti " + changelog["version"], description=changelog["summary"], color=0xecc98e)
+
+    count = 1
+    for change_title, change in changelog["changes"].items():
+        embed.add_field(name=f"{count}. " + change_title, value=change, inline=False)
+        count += 1
+
+    return embed
+
 class Help(commands.Cog):
     def __init__(self, bot : commands.bot):
         super().__init__()
@@ -76,6 +94,10 @@ class Help(commands.Cog):
         view.message = await interaction.original_message() # Needed to delete the message when it times out
 
         await view.wait()
+
+    @app_commands.command(name="changelog", description="Displays the latest changes to Roti!")
+    async def _changelog(self, interaction : discord.Interaction):
+        await interaction.response.send_message(embed=_generate_changelog_embed())
 
 #Generates the options for the view object
 #If the page is None, generates the general page that lists all of the categories, otherwise will generate category-specific choices.

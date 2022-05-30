@@ -161,5 +161,73 @@
         }
       }
     }
+  },
+  "Quotes": {
+    "title": "Help for all of the Quote commands",
+    "description": "Allows for the storing, retrieval, and modification of custom phrases on demand.",
+    "command_base": "quote",
+    "emoji": ":pushpin:",
+    "commands": {
+      "list": {
+        "description": "Lists all of the quotes in the guild.",
+        "usage": "/quote list <query> <show_defaultless>",
+        "arguments": {
+          "query": "**OPTIONAL** keyword to narrow search results, will match against tags, authors, and quote content.",
+          "show_defaultless": "**OPTIONAL** toggle to decide whether to show quotes without default quotes (no replaceable portions), by default it is False."
+        }
+      },
+      "remove": {
+        "description": "Allows for you to remove a specific quote.",
+        "usage": "/quote remove <query>",
+        "arguments": {
+          "query": "**OPTIONAL** keyword to narrow search results, will match against tags, authors, and quote content."
+        }
+      },
+      "random": {
+        "description": "Displays a random quote. Will **only** search for quotes that have \"default\" responses!",
+        "usage": "/quote random",
+        "arguments": "None"
+      },
+      "say": {
+        "description": "Displays a specific quote.",
+        "usage": "/quote say [tag] [type]",
+        "arguments": {
+          "tag": "The unique tag of the quote you would like to say (autocomplete provided).",
+          "type": "The type of the quote (replaceable/nonreplaceable) that you would like to say. *If nonreplaceable is chosen for a quote that is replaceable and vice versa, Roti will attempt to say the provided default quote for that tag.*"
+        }
+      },
+      "add nonreplaceable": {
+        "description": "Adds a new nonreplaceable quote to Roti. This quote **cannot** have any replaceable portions!",
+        "usage": "/quote add nonreplaceable [quote] [tag] <name>",
+        "arguments": {
+          "quote": "The new quote you would like to add to Roti.",
+          "tag": "A *unique* identifier that is permanently associated with this quote.",
+          "name": "An **OPTIONAL** argument to add who said this quote."
+        }
+      },
+      "add replaceable": {
+        "description": "Adds a new replaceable quote to Roti, with arguments inside the provided Modal (Pop-up). This quote **must** have replaceable portions!",
+        "usage": "/quote add replaceable",
+        "arguments": {
+          "quote": "A required field that stores the quote with its replaceable portions, formatted as {#} for each portion, where # is a number from 0-3. Duplicate replace portions are allowed.\nEx. \"Hello {0}\", where {0} is the replaceable portion.",
+          "tag": "A required field that is the unique identifier for this quote.",
+          "default": "**OPTIONAL** field to store the given quote WITHOUT any replaceable portions, acting as a \"default\" quote for this tag.",
+          "name": "**OPTIONAL** field to store who said this quote."
+        }
+      }
+    }
+  },
+  "Changelog": {
+    "title": "Help for the changelog command",
+    "description": "Displays all of the recent updates to Roti!",
+    "command_base": "None",
+    "emoji": ":exclamation:",
+    "commands": {
+      "changelog": {
+        "description": "Displays the changelog",
+        "usage": "/changelog",
+        "arguments": "None"
+      }
+    }
   }
 }

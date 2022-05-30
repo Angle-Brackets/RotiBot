@@ -1,5 +1,6 @@
 import os
 import time
+import traceback
 
 from pymongo import MongoClient
 from dotenv import load_dotenv
@@ -63,7 +64,6 @@ def push_data(serverID, key: str):
     except Exception as e:
         raise ConnectionError("Unable to connect to database")
 
-
 def delete_guild_entry(serverID):
     collections.delete_one({"server_id": serverID})
     db[serverID].clear()
@@ -74,4 +74,4 @@ def get_data(serverID):
 
 
 def calculate_uptime():
-    return strftime("%H:%M:%S", gmtime(time.time() - bot_start_time))
+    return strftime("%d:%H:%M:%S", gmtime(time.time() - bot_start_time))
