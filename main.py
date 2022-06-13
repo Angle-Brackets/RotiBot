@@ -1,4 +1,4 @@
-#ROTI BOT V1.6 ALPHA
+#ROTI BOT V1.65 ALPHA
 #BY SOUPA#0524, CURRENTLY WRITTEN IN PYTHON USING MONGO DATABASE FOR DATA.
 #Currently uses discord.py 2.0, which must be manually installed from the git.
 
@@ -13,7 +13,7 @@ from data import update_database, delete_guild_entry
 
 #load credentials
 load_dotenv(".env")
-test_build = True
+test_build = False
 class Roti(commands.Bot):
     def __init__(self):
         super().__init__(

@@ -1,8 +1,8 @@
 {
-  "version": "Alpha V1.5",
-  "summary": "Adds /quote and /changelog to Roti!",
+  "version": "Alpha V1.65",
+  "summary": "Adds /generate and some debug commands to Roti!",
   "changes": {
-    "NEW /quote": "The /quote command has been added to Roti so you can now blackmail your friends with all of the suspicious things they've said! Check out the new commands and how to use them in /help or through the slash command list!",
-    "NEW /changelog": "The /changelog command has been also added to Roti! You can check out the recent updates to Roti in an easy-to-access way!"
+    "NEW /generate": "Allows you to generate unique images from an AI provided by boredhumans.com. Check out the commands available in /help or the slash command list!",
+    "NEW debug commands": "Added a few debug commands you can't use :P"
   }
 }

@@ -217,6 +217,29 @@
       }
     }
   },
+  "Generate": {
+    "title": "Help for the generate command",
+    "description": "Generates images from an AI provided by boredhumans.com, check them out!",
+    "command_base": "generate",
+    "emoji": ":factory:",
+    "commands": {
+      "waifu": {
+        "description": "Generates a waifu from the AI, sadly they are not real.",
+        "usage": "/generate waifu",
+        "arguments": "None"
+      },
+      "quote": {
+        "description": "Generates a \"motivational\" quote from the AI.",
+        "usage": "/generate quote",
+        "arguments": "None"
+      },
+      "pizza": {
+        "description": "Generates a pizza from the AI, maybe they'll be appetizing.",
+        "usage": "/generate pizza",
+        "arguments": "None"
+      }
+    }
+  },
   "Changelog": {
     "title": "Help for the changelog command",
     "description": "Displays all of the recent updates to Roti!",
