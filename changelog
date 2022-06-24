@@ -1,8 +1,7 @@
 {
-  "version": "Alpha V1.65",
-  "summary": "Adds /generate and some debug commands to Roti!",
+  "version": "Alpha V1.66",
+  "summary": "Small Hotfix for Talkbacks",
   "changes": {
-    "NEW /generate": "Allows you to generate unique images from an AI provided by boredhumans.com. Check out the commands available in /help or the slash command list!",
-    "NEW debug commands": "Added a few debug commands you can't use :P"
+    "Bugfixes":"Fixed a bug with talkbacks not correctly grouping phrases that used quotes"
   }
 }

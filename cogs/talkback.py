@@ -17,8 +17,8 @@ def _add_talkback_phrase(serverID, trigger_phrases, response_phrases):
             res = ""
             t_data = db[serverID]["trigger_phrases"] #loads the current trigger data
             r_data = db[serverID]["response_phrases"] #loads the current response data
-            trigger_list = re.split(r'\s+(?=[^"]*(?:"[^"]*"[^"]*)*$)',trigger_phrases) #separates entries by spaces, quotes are used to group items
-            response_list = re.split(r'\s+(?=[^"]*(?:"[^"]*"[^"]*)*$)',response_phrases) #see above
+            trigger_list = re.split(r'\S+(?:=(?:"[^"]*"|\S+)?)?',trigger_phrases) #separates entries by spaces, quotes are used to group items
+            response_list = re.split(r'\S+(?:=(?:"[^"]*"|\S+)?)?',response_phrases) #see above
 
             if len(trigger_list) > 10 or len(response_list) > 10:
                 return "Failed to create new talkback action (greater than 10 triggers or responses given)."
