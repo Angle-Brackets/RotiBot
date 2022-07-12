@@ -4,9 +4,19 @@ import typing
 import discord
 import wavelink
 import time
-from discord.ext import commands
+
+from discord.ext import commands, tasks
 from discord import app_commands
 from dotenv import load_dotenv
+from data import db
+
+"""
+Some notes about music functionality:
+-I do NOT plan to add Spotify support, this is for several reasons, but mainly it is due to the fact that it would be 
+incredibly limited and borderline useless as it is apparently functionally impossible to play music from spotify directly, and
+wavelink and all other libs just do a youtube search for a song that has a similar name and play that. 
+-I DO plan on adding fun little filters and such that you can add to the music for fun or for trolling.
+"""
 
 load_dotenv(".env")
 def _is_connected(ctx):
@@ -14,18 +24,21 @@ def _is_connected(ctx):
     return voice_client and voice_client.is_connected()
 
 
-def _generate_queue_embed(vc : wavelink.Player):
+def _generate_queue_embed(vc : wavelink.Player, interaction : discord.Interaction):
     queue = vc.queue
-    embed = discord.Embed(title="Music Queue:", description="Currently playing: {0} [{1}/{2}]".format(queue.__getitem__(0), time.strftime("%H:%M:%S", time.gmtime(vc.position)), time.strftime("%H:%M:%S", time.gmtime(queue.__getitem__(0).duration))), color=0xecc98e)
+    embed = discord.Embed(title="<a:animated_music:996261334272454736> Music Queue <a:animated_music:996261334272454736>", description="Currently {0}: [{1}]({2}) [{3}/{4}]".format("playing" if not vc.looped else "looping", queue.__getitem__(0), queue[0].info.get("uri"), time.strftime("%H:%M:%S", time.gmtime(vc.position)), time.strftime("%H:%M:%S", time.gmtime(queue.__getitem__(0).duration))), color=0xecc98e)
+    embed.set_footer(text="Special thanks to Wavelink & Pythonista for the library used for the music playback!")
 
     for i in range(len(queue)):
-        embed.add_field(name="{0}. {1} - [{2}]".format(i + 1, queue.__getitem__(i), time.strftime("%H:%M:%S", time.gmtime(queue.__getitem__(i).duration))), value='\u200b', inline=False)
+        embed.add_field(name="{0}. {1} - [{2}]".format(i + 1, queue.__getitem__(i), time.strftime("%H:%M:%S", time.gmtime(queue.__getitem__(i).duration))), value=f"Requested by: <@{vc.queue_appenders[i]}>", inline=False)
 
     #Gets the thumbnail to the current video playing
-    embed.set_thumbnail(url="https://img.youtube.com/vi/{0}/maxresdefault.jpg".format(queue.__getitem__(0).info.get("identifier")))
+    embed.set_thumbnail(url=queue.__getitem__(0).thumb)
+    vc.queue_embed = embed
+    vc.queue_interaction = interaction
     return embed
 
-#Must start Lavalink.jar with java -jar Lavalink.jar
+#Must start Lavalink.jar with java -jar Lavalink.jar and make sure you have the application.yml
 """
 Note about the implementation of the queue for this bot, while it might seem strange, I am de-queueing only when 
 the song finishes rather than when it starts in order to display all the songs in /queue to avoid confusion.
@@ -44,6 +57,19 @@ class Music(commands.Cog):
             port=2333,
             password=os.getenv("MUSIC_PASS"),
         )
+
+    @tasks.loop(seconds=1)
+    async def _update_queue_embed_time(self, vc : wavelink.Player):
+        try:
+            if vc.queue_embed is not None and vc.queue_interaction is not None:
+                queue = vc.queue
+                vc.queue_embed.description = "Currently {0}: [{1}]({2}) [{3}/{4}]".format("playing" if not vc.looped else "looping", queue.__getitem__(0), queue[0].info.get("uri"), time.strftime("%H:%M:%S", time.gmtime(vc.position)), time.strftime("%H:%M:%S", time.gmtime(queue.__getitem__(0).duration)))
+                await vc.queue_interaction.edit_original_message(embed=vc.queue_embed)
+            else:
+                self._update_queue_embed_time.stop()
+        except:
+            self._update_queue_embed_time.stop()
+
 
     @commands.Cog.listener()
     async def on_wavelink_node_ready(self, node : wavelink.Node):
@@ -75,10 +101,12 @@ class Music(commands.Cog):
         else:
             if not player.queue.is_empty:
                 player.queue.get()  # Dequeues current song
+                player.queue_appenders.pop(0) # Dequeues latest person's name from queue of names
                 player.skipped = False
                 if not player.queue.is_empty:
                     track = player.queue.__getitem__(0)  # DO NOT DEQUEUE THIS UNTIL ITS DONE!!!
                     await player.play(track)
+                    _generate_queue_embed(player, player.queue_interaction)
                 # Not sure how to send a message to say a new song is playing...
 
     @app_commands.command(name="join", description="Makes the bot join a valid voice channel")
@@ -93,6 +121,7 @@ class Music(commands.Cog):
 
                 vc.looped = False # Field to describe is current song is looped - overriden by skipped
                 vc.skipped = False # Field to describe if current song was skipped - used to override loop
+                vc.queue_appenders = list() # Field to list the names of the people that requested a song
 
                 await interaction.followup.send("Successfully connected to `{0}`!".format(interaction.user.voice.channel))
             else:
@@ -108,6 +137,7 @@ class Music(commands.Cog):
                 vc: wavelink.Player = await interaction.user.voice.channel.connect(cls=wavelink.Player)
                 vc.looped = False # Initializes custom parameter looped
                 vc.skipped = False # Field to describe if current song was skipped - used to override loop
+                vc.queue_appenders = list() # Field to list the names of the people that requested a song
             else:
                 vc: wavelink.Player = interaction.guild.voice_client
         except Exception as e:
@@ -119,14 +149,17 @@ class Music(commands.Cog):
         if not vc.queue.is_empty:
             vc.queue.put(track)
             await interaction.followup.send(f"Added {track.title} to the queue!")
+            vc.queue_appenders.append(interaction.user.id)
         else:
             await vc.play(track)
             vc.queue.put(track)
+            vc.queue_appenders.append(interaction.user.id)
             await interaction.followup.send("Now playing: " + track.title)
 
     @app_commands.command(name="pause", description="Pauses the music.")
     async def _pause(self, interaction : discord.Interaction):
         await interaction.response.defer()
+
         if interaction.user.voice is None or not interaction.guild.voice_client:
             await interaction.followup.send("I'm not in a voice channel!")
         else:
@@ -190,7 +223,16 @@ class Music(commands.Cog):
         else:
             vc : wavelink.Player = interaction.guild.voice_client
             if not vc.queue.is_empty:
-                await interaction.followup.send(embed=_generate_queue_embed(vc))
+                view = MusicNav(vc)
+
+                vc.queue_embed = _generate_queue_embed(vc, interaction)
+                view.message = await interaction.followup.send(embed=vc.queue_embed, view=view)
+                view.message = await interaction.original_message()
+
+                if not self._update_queue_embed_time.is_running():
+                    self._update_queue_embed_time.start(vc)
+
+                await view.wait()
             else:
                 await interaction.followup.send("The Queue is empty.")
 
@@ -202,8 +244,92 @@ class Music(commands.Cog):
         else:
             vc : wavelink.Player = interaction.guild.voice_client
             vc.queue.clear()
+            vc.queue_appenders.clear()
+            vc.queue_embed = None
             await interaction.guild.voice_client.disconnect(force=True)
             await interaction.followup.send("Disconnected from voice!")
 
+    # @app_commands.command(name="volume", description="Modify the base volume of Roti (Default is 1.0)")
+    # @app_commands.describe(volume="An integer between 0 and 500%, default volume is 100%")
+    # async def _volume(self, interaction : discord.Interaction, *, volume : typing.Optional[int]):
+    #     await interaction.response.defer()
+    #     if volume is None:
+    #         await interaction.followup.send("The current volume is: {0}%".format(db[interaction.guild.id]["settings"]["music"]["volume"]),ephemeral=True)
+    #     elif volume < 0 or volume > 500:
+    #         await interaction.followup.send("Invalid volume specified: Enter an integer between 0 and 500.")
+    #     else:
+    #         db[interaction.guild.id]["settings"]["music"]["volume"] = volume
+    #         if interaction.user.voice is None or not interaction.guild.voice_client:
+    #             await interaction.followup.send("Changed volume to {0}%".format(volume))
+    #         else:
+    #             vc : wavelink.Player = interaction.guild.voice_client
+    #
+    #             await vc.set_filter(wavelink.Filter(volume=2.3), seek=True)
+    #             await interaction.followup.send("Now playing at {0}% volume".format(volume))
+    #             return
+
 async def setup(bot: commands.Bot):
     await bot.add_cog(Music(bot))
+
+
+class MusicNav(discord.ui.View):
+    def __init__(self, player : wavelink.Player):
+        super().__init__()
+        self.timeout = 60
+        self.player = player
+
+    @discord.ui.button(emoji="<:playbtn:994759843749580861>", style=discord.ButtonStyle.secondary)
+    async def _unpause(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.voice is not None or interaction.guild.voice_client:
+            await self.player.resume()
+            if self.player.is_paused():
+                await interaction.response.send_message("Unpaused!", ephemeral=True)
+
+    @discord.ui.button(emoji="<:pausebtn:994763090413498388>", style=discord.ButtonStyle.secondary)
+    async def _pause(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.voice is not None or interaction.guild.voice_client:
+            await self.player.pause()
+            if self.player.is_playing():
+                await interaction.response.send_message("Paused!", ephemeral=True)
+
+    @discord.ui.button(emoji="<:loopicon:994754841710702733>", style=discord.ButtonStyle.secondary)
+    async def _loop(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.voice is not None or interaction.guild.voice_client:
+            self.player.looped = not self.player.looped
+            if self.player.looped:
+                await interaction.response.send_message("Will continue to loop the current song!", ephemeral=True)
+            else:
+                await interaction.response.send_message("Will stop looping the current song!", ephemeral=True)
+
+    @discord.ui.button(emoji="<:skipbtn:994763472522977290>", style=discord.ButtonStyle.secondary)
+    async def _skip(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.voice is not None or interaction.guild.voice_client:
+            if not self.player.queue.is_empty:
+                await interaction.response.send_message(f"Skipped {self.player.queue.__getitem__(0)}")
+                self.player.skipped = True  # Necessary to override looped parameter
+                await self.player.stop()
+                await self.message.edit(embed=self.player.queue_embed)
+
+    @discord.ui.button(emoji="<:disconnectbtn:996156534927130735>", style=discord.ButtonStyle.secondary)
+    async def _disconnect(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.voice is not None or interaction.guild.voice_client:
+            self.player.queue.clear()
+            await interaction.guild.voice_client.disconnect(force=True)
+            await interaction.response.send_message("Disconnected from voice!")
+            await self.message.delete()
+            self.stop()
+
+    @discord.ui.button(label="Close", style=discord.ButtonStyle.danger)
+    async def _close(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.message.delete()
+        self.stop()
+
+    async def on_timeout(self) -> None:
+        await self.message.delete()
+        self.player.queue_embed = None
+        self.stop()
+
+
+
+
+

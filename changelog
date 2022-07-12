@@ -1,9 +1,7 @@
 {
-  "version": "Alpha V1.67",
-  "summary": "ACTUAL Small Hotfix for Talkbacks",
+  "version": "Alpha V1.69",
+  "summary": "Music Bugfixes (Also funny number haha)",
   "changes": {
-    "Bugfixes":"
-    -THIS TIME I ACTUALLY fixed a bug with talkbacks not correctly grouping phrases that used quotes.\n
-    -Minor code cleanup"
+    "Bugfixes":"-Fixed Bugs within the music commands with not queueing songs correctly.\n-Added track controls and live updating to /queue command."
   }
 }

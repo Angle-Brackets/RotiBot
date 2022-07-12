@@ -78,7 +78,7 @@
        }
      },
      "queue": {
-       "description": "Displays the current state of the music queue and the current song's remaining time. Queue is cleared when Roti is disconnected or when all users disconnect from a voice channel.",
+       "description": "Displays the current state of the music queue and the current song's remaining time. Queue is cleared when Roti is disconnected or when all users disconnect from a voice channel. Also displays visual icons for track controls.",
        "usage": "/queue (must be in a voice channel)",
        "arguments": "None"
      },

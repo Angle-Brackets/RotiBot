@@ -38,8 +38,9 @@ DATA_STRUCTURE = {
         },
 
         "music": {
-            "looped": False,  # If its looped...duh
-            "speed": 1  # Speed of songs, x1 - x2 speed.
+            "looped": False,  # If its looped...duh (UNUSED)
+            "speed": 1,  # Speed of songs, x1 - x2 speed.
+            "volume": 100, #Base volume of Roti while playing music
         }
     },
 }
