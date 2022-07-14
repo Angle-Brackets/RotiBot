@@ -4,11 +4,12 @@ import typing
 import discord
 import wavelink
 import time
+import random
 
 from discord.ext import commands, tasks
 from discord import app_commands
 from dotenv import load_dotenv
-from data import db
+from data import db, push_data
 
 """
 Some notes about music functionality:
@@ -151,6 +152,14 @@ class Music(commands.Cog):
             await interaction.followup.send(f"Added {track.title} to the queue!")
             vc.queue_appenders.append(interaction.user.id)
         else:
+            v = db[interaction.guild.id]["settings"]["music"]["volume"] / 100
+            s = db[interaction.guild.id]["settings"]["music"]["speed"] / 100
+            p = db[interaction.guild.id]["settings"]["music"]["pitch"] / 100
+
+            await vc.set_filter(wavelink.Filter(volume=v), seek=True)
+            await vc.set_filter(wavelink.filters.Filter(timescale=wavelink.filters.Timescale(speed=s)),seek=True)
+            await vc.set_filter(wavelink.filters.Filter(timescale=wavelink.filters.Timescale(pitch=p)), seek=True)
+
             await vc.play(track)
             vc.queue.put(track)
             vc.queue_appenders.append(interaction.user.id)
@@ -223,7 +232,7 @@ class Music(commands.Cog):
         else:
             vc : wavelink.Player = interaction.guild.voice_client
             if not vc.queue.is_empty:
-                view = MusicNav(vc)
+                view = MusicNav(vc, interaction.guild_id)
 
                 vc.queue_embed = _generate_queue_embed(vc, interaction)
                 view.message = await interaction.followup.send(embed=vc.queue_embed, view=view)
@@ -249,34 +258,81 @@ class Music(commands.Cog):
             await interaction.guild.voice_client.disconnect(force=True)
             await interaction.followup.send("Disconnected from voice!")
 
-    # @app_commands.command(name="volume", description="Modify the base volume of Roti (Default is 1.0)")
-    # @app_commands.describe(volume="An integer between 0 and 500%, default volume is 100%")
-    # async def _volume(self, interaction : discord.Interaction, *, volume : typing.Optional[int]):
-    #     await interaction.response.defer()
-    #     if volume is None:
-    #         await interaction.followup.send("The current volume is: {0}%".format(db[interaction.guild.id]["settings"]["music"]["volume"]),ephemeral=True)
-    #     elif volume < 0 or volume > 500:
-    #         await interaction.followup.send("Invalid volume specified: Enter an integer between 0 and 500.")
-    #     else:
-    #         db[interaction.guild.id]["settings"]["music"]["volume"] = volume
-    #         if interaction.user.voice is None or not interaction.guild.voice_client:
-    #             await interaction.followup.send("Changed volume to {0}%".format(volume))
-    #         else:
-    #             vc : wavelink.Player = interaction.guild.voice_client
-    #
-    #             await vc.set_filter(wavelink.Filter(volume=2.3), seek=True)
-    #             await interaction.followup.send("Now playing at {0}% volume".format(volume))
-    #             return
+    @app_commands.command(name="volume", description="Modify the base volume of Roti (Default is 100).")
+    @app_commands.describe(volume="An integer between 0 and 500%, default volume is 100%")
+    async def _volume(self, interaction : discord.Interaction, *, volume : typing.Optional[app_commands.Range[int,0,500]]):
+        await interaction.response.defer()
+        if volume is None:
+            await interaction.followup.send("The current volume is: {0}%".format(db[interaction.guild.id]["settings"]["music"]["volume"]),ephemeral=True)
+        else:
+            db[interaction.guild.id]["settings"]["music"]["volume"] = volume
+            push_data(interaction.guild_id, "settings")
+            if interaction.user.voice is None or not interaction.guild.voice_client:
+                await interaction.followup.send(f"Changed volume to {volume}%")
+            else:
+                vc : wavelink.Player = interaction.guild.voice_client
+                volume /= 100
+                await vc.set_filter(wavelink.Filter(volume=volume), seek=True)
+                await interaction.followup.send(f"Now playing at {round(volume * 100)}% volume.")
+                return
+
+    @app_commands.command(name="speed", description="Modify the playback speed of songs (Default is 100%).")
+    @app_commands.describe(speed="An integer between 0 and 200%, default speed is 100%")
+    async def _speed(self, interaction : discord.Interaction, *, speed : typing.Optional[app_commands.Range[int, 0, 200]]):
+        await interaction.response.defer()
+        if speed is None:
+            await interaction.followup.send(
+                "The current speed is: {0}%".format(db[interaction.guild.id]["settings"]["music"]["speed"]),
+                ephemeral=True)
+        else:
+            db[interaction.guild.id]["settings"]["music"]["speed"] = speed
+            push_data(interaction.guild_id, "settings")
+            if interaction.user.voice is None or not interaction.guild.voice_client:
+                await interaction.followup.send(f"Changed playback speed to {speed}%")
+            else:
+                vc : wavelink.Player = interaction.guild.voice_client
+                speed /= 100
+                await vc.set_filter(wavelink.filters.Filter(timescale=wavelink.filters.Timescale(speed=speed)), seek=True)
+                await interaction.followup.send(f"Now playing at {round(speed * 100)}% speed.")
+                return
+
+    @app_commands.command(name="pitch", description="Modify the playback pitch of songs (Default is 100%).")
+    @app_commands.describe(pitch="An integer between 0 and 200%, default is 100%")
+    async def _pitch(self, interaction : discord.Interaction, *, pitch : typing.Optional[app_commands.Range[int, 0, 200]]):
+        await interaction.response.defer()
+        if pitch is None:
+            await interaction.followup.send(
+                "The current pitch is: {0}%".format(db[interaction.guild.id]["settings"]["music"]["pitch"]),ephemeral=True)
+        else:
+            db[interaction.guild.id]["settings"]["music"]["pitch"] = pitch
+            push_data(interaction.guild_id, "settings")
+            if interaction.user.voice is None or not interaction.guild.voice_client:
+                await interaction.followup.send(f"Changed playback pitch to {pitch}%")
+            else:
+                vc: wavelink.Player = interaction.guild.voice_client
+                pitch /= 100
+                await vc.set_filter(wavelink.filters.Filter(timescale=wavelink.filters.Timescale(pitch=pitch)),seek=True)
+                await interaction.followup.send(f"Now playing at {round(pitch * 100)}% pitch.")
+                return
+
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Music(bot))
 
-
 class MusicNav(discord.ui.View):
-    def __init__(self, player : wavelink.Player):
+    global guild_id
+    def __init__(self, player : wavelink.Player, g_id):
         super().__init__()
+        global guild_id
         self.timeout = 60
         self.player = player
+        self.guild_id = g_id
+        self._volume_label.label = "{0}%".format(db[self.guild_id]["settings"]["music"]["volume"])
+        self._speed_label.label = "{0}%".format(db[self.guild_id]["settings"]["music"]["speed"])
+        self._pitch_label.label = "{0}%".format(db[self.guild_id]["settings"]["music"]["pitch"])
+
+        self._volume_label.emoji = "🔇" if db[self.guild_id]["settings"]["music"]["volume"] == 0 else discord.PartialEmoji(name="kirbin", id=996961280919355422, animated=True)
+        self._speed_label.emoji = discord.PartialEmoji(name="sonic_waiting", id=996961282639024171, animated=True) if db[self.guild_id]["settings"]["music"]["speed"] < 100 else discord.PartialEmoji(name="sonic_running", id=996961281837908008, animated=True)
 
     @discord.ui.button(emoji="<:playbtn:994759843749580861>", style=discord.ButtonStyle.secondary)
     async def _unpause(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -318,6 +374,24 @@ class MusicNav(discord.ui.View):
             await interaction.response.send_message("Disconnected from voice!")
             await self.message.delete()
             self.stop()
+
+    @discord.ui.button(label="Undefined Volume", style=discord.ButtonStyle.primary)
+    async def _volume_label(self, interaction : discord.Interaction, button : discord.ui.Button):
+        # It's just a label.
+        await interaction.response.send_message("It's just a label..." if random.random() < 0.95 else "https://tinyurl.com/c9wcjhsc", ephemeral=True)
+        pass
+
+    @discord.ui.button(label="Undefined Speed", style=discord.ButtonStyle.primary)
+    async def _speed_label(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # It's just a label.
+        await interaction.response.send_message("It's just a label..." if random.random() < 0.95 else "https://tinyurl.com/c9wcjhsc", ephemeral=True)
+        pass
+
+    @discord.ui.button(label="Undefined Pitch", emoji="<:treble:996969244963131473>", style=discord.ButtonStyle.primary)
+    async def _pitch_label(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # It's just a label.
+        await interaction.response.send_message("It's just a label..." if random.random() < 0.95 else "https://tinyurl.com/c9wcjhsc", ephemeral=True)
+        pass
 
     @discord.ui.button(label="Close", style=discord.ButtonStyle.danger)
     async def _close(self, interaction: discord.Interaction, button: discord.ui.Button):

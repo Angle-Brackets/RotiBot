@@ -41,26 +41,22 @@ class Settings(commands.GroupCog, group_name="settings"):
                 "enabled strict talkback trigger matching." if state else "disabled strict talkback trigger matching."))
 
     @talkback_group.command(name="duration", description="Time in seconds before a talkback response is deleted (0 makes messages permanent).")
-    async def _talkback_duration(self, interaction : discord.Interaction, length : typing.Optional[int]):
+    async def _talkback_duration(self, interaction : discord.Interaction, length : typing.Optional[app_commands.Range[int, 0]]):
         await interaction.response.defer()
         currentLength = db[interaction.guild_id]["settings"]["talkback"]["duration"]
         if length is None:
             await interaction.followup.send("Currently, my responses are {0}".format("not set to delete themselves automatically" if currentLength == 0 else "set to delete themselves after " + str(currentLength) + " seconds."))
-        elif length < 0:
-            await interaction.followup.send("Invalid length specified (minimum of 0).")
         else:
             db[interaction.guild_id]["settings"]["talkback"]["duration"] = length
             data.push_data(interaction.guild_id, "settings")
             await interaction.followup.send("Successfully {0}".format("set talkback responses to be delete after " + str(length) + " seconds." if length > 0 else "set talkback responses to remain permanently in chat."))
 
     @talkback_group.command(name="probability", description="Probability that Roti will respond to a talkback trigger, percentage from 0 - 100%.")
-    async def _talkback_prob(self, interaction : discord.Interaction, probability : typing.Optional[int]):
+    async def _talkback_prob(self, interaction : discord.Interaction, probability : typing.Optional[app_commands.Range[int, 0, 100]]):
         await interaction.response.defer()
         currentProb = db[interaction.guild_id]["settings"]["talkback"]["res_probability"]
         if probability is None:
             await interaction.followup.send("Currently, I have a {0}% chance to respond to talkback triggers.".format(currentProb))
-        elif probability < 0 or probability > 100:
-            await interaction.followup.send("Invalid probability specified (Integer between 0 and 100, inclusive).")
         else:
             db[interaction.guild_id]["settings"]["talkback"]["res_probability"] = probability
             data.push_data(interaction.guild_id, "settings")

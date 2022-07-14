@@ -103,6 +103,27 @@
         "arguments": {
           "mode": "Enable/Disable whether Roti is looping the current song."
         }
+      },
+      "volume": {
+        "description": "Modifies the base music playback volume of Roti for **ALL** listeners.",
+        "usage": "/volume <volume>",
+        "arguments": {
+          "volume": "The percentage change in volume ranging from 0% to 500%. Default is 100%."
+        }
+      },
+      "speed": {
+        "description": "Modifies the base music playback speed of Roti for **ALL** listeners.",
+        "usage": "/speed <speed>",
+        "arguments": {
+          "speed": "The percentage change in speed ranging from 0% to 200%. Default is 100%."
+        }
+      },
+      "pitch": {
+        "description": "Modifies the base music playback pitch of Roti for **ALL** listeners.",
+        "usage": "/pitch <pitch>",
+        "arguments": {
+          "pitch": "The percentage change in pitch ranging from 0% to 200%. Default is 100%."
+        }
       }
     }
   },

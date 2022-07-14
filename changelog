@@ -1,7 +1,8 @@
 {
-  "version": "Alpha V1.69",
-  "summary": "Music Bugfixes (Also funny number haha)",
+  "version": "Alpha V1.70",
+  "summary": "More Music Features!",
   "changes": {
-    "Bugfixes":"-Fixed Bugs within the music commands with not queueing songs correctly.\n-Added track controls and live updating to /queue command."
+    "New Commands":"-Added 3 new commands: /volume, /speed, and /pitch.\n-/volume: Changes the base volume of Roti by a given percentage.\n-/speed: Changes the base playback speed of Roti by a given percentage\n-/pitch: Changes the base playback pitch of Roti by a given percentage\n-Be mindful of others when using these commands!",
+    "Updated Commands":"-Removed various bound-related error messages as all commands are bounded by the slash command itself rather than in a conditional.\n-/queue now reflects the current volume, speed, and pitch, in addition to some new styling.\n-/help has been updated with the new commands."
   }
 }

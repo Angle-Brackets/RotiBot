@@ -84,7 +84,7 @@ def _generate_embed_and_triggers(guild, msg = "", list_enabled = False):
 
     if list_enabled:
         if not msg:
-            empty_embed = discord.Embed(title="List of all talkbacks in " + guild.name, description="React with ❌ to cancel the command, or ▶️ and ◀️ to scroll through each page.", color=0xecc98e)
+            empty_embed = discord.Embed(title="List of all talkbacks in " + guild.name, description="Navigate with the Buttons Below.", color=0xecc98e)
         else:
             empty_embed = discord.Embed(title="List of all talkbacks in " + guild.name + " found with keyword: " + "\"" + msg + "\"", description="React with ❌ to cancel the command, or ▶️ and ◀️ to scroll through each page.", color=0xecc98e)
     else:
