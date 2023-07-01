@@ -9,7 +9,7 @@ import random
 from discord.ext import commands, tasks
 from discord import app_commands
 from dotenv import load_dotenv
-from data import db, push_data
+from data import db, push_data, FilterParams
 
 """
 Some notes about music functionality:
@@ -24,6 +24,26 @@ def _is_connected(ctx):
     voice_client = discord.utils.get(ctx.bot.voice_clients, guild=ctx.guild)
     return voice_client and voice_client.is_connected()
 
+"""
+This function is used to update the parameters for the music bot at once, as they all must be set in order for
+the changes to appropriately take place.
+"""
+async def _update_voice_parameters(filters : dict, interaction : discord.Interaction, vc : typing.Optional[wavelink.Player]):
+    v = db[interaction.guild.id]["settings"]["music"]["volume"] / 100
+    s = db[interaction.guild.id]["settings"]["music"]["speed"] / 100
+    p = db[interaction.guild.id]["settings"]["music"]["pitch"] / 100
+
+    # Only apply to vc if there is an active song.
+    if vc is not None:
+        await vc.set_filter(wavelink.filters.Filter(
+            volume=v,
+            timescale=wavelink.filters.Timescale(speed=s, pitch=p),
+            tremolo=filters["Tremolo"],
+            vibrato=filters["Vibrato"],
+            rotation=filters["Rotation"],
+            distortion=filters["Distortion"],
+            low_pass=filters["Low_Pass"]
+        ), seek=True)
 
 def _generate_queue_embed(vc : wavelink.Player, interaction : discord.Interaction):
     queue = vc.queue
@@ -48,6 +68,17 @@ the song finishes rather than when it starts in order to display all the songs i
 class Music(commands.Cog):
     def __init__(self, bot : commands.Bot):
         self.bot = bot
+        # These are not saved when the bot exits the channel or when shut down.
+        self.filters = {
+            "Tremolo": wavelink.Tremolo(),
+            "Vibrato": None,
+            "Rotation": None,
+            "Distortion": None,
+            "Low_Pass": None,
+        }
+
+        self.filters_default = self.filters.copy()
+
         bot.loop.create_task(self.connect_nodes())
 
     async def connect_nodes(self):
@@ -65,7 +96,7 @@ class Music(commands.Cog):
             if vc.queue_embed is not None and vc.queue_interaction is not None:
                 queue = vc.queue
                 vc.queue_embed.description = "Currently {0}: [{1}]({2}) [{3}/{4}]".format("playing" if not vc.looped else "looping", queue.__getitem__(0), queue[0].info.get("uri"), time.strftime("%H:%M:%S", time.gmtime(vc.position)), time.strftime("%H:%M:%S", time.gmtime(queue.__getitem__(0).duration)))
-                await vc.queue_interaction.edit_original_message(embed=vc.queue_embed)
+                await vc.queue_interaction.edit_original_response(embed=vc.queue_embed)
             else:
                 self._update_queue_embed_time.stop()
         except:
@@ -145,25 +176,22 @@ class Music(commands.Cog):
             await interaction.followup.send("Unable to join channel, please specify a valid channel or join one.")
             return
 
-        track = await wavelink.YouTubeTrack.search(query=query, return_first=True)
-        #Will add queue interaction and pause checking soon
-        if not vc.queue.is_empty:
-            vc.queue.put(track)
-            await interaction.followup.send(f"Added {track.title} to the queue!")
-            vc.queue_appenders.append(interaction.user.id)
-        else:
-            v = db[interaction.guild.id]["settings"]["music"]["volume"] / 100
-            s = db[interaction.guild.id]["settings"]["music"]["speed"] / 100
-            p = db[interaction.guild.id]["settings"]["music"]["pitch"] / 100
+        try:
+            track = await wavelink.YouTubeTrack.search(query=query, return_first=True)
 
-            await vc.set_filter(wavelink.Filter(volume=v), seek=True)
-            await vc.set_filter(wavelink.filters.Filter(timescale=wavelink.filters.Timescale(speed=s)),seek=True)
-            await vc.set_filter(wavelink.filters.Filter(timescale=wavelink.filters.Timescale(pitch=p)), seek=True)
+            if not vc.queue.is_empty:
+                vc.queue.put(track)
+                await interaction.followup.send(f"Added {track.title} to the queue!")
+                vc.queue_appenders.append(interaction.user.id)
+            else:
+                await _update_voice_parameters(self.filters, interaction, vc)
 
-            await vc.play(track)
-            vc.queue.put(track)
-            vc.queue_appenders.append(interaction.user.id)
-            await interaction.followup.send("Now playing: " + track.title)
+                await vc.play(track)
+                vc.queue.put(track)
+                vc.queue_appenders.append(interaction.user.id)
+                await interaction.followup.send("Now playing: " + track.title)
+        except Exception as e:
+            await interaction.followup.send("Failed to search for given video. Try with another query!")
 
     @app_commands.command(name="pause", description="Pauses the music.")
     async def _pause(self, interaction : discord.Interaction):
@@ -236,7 +264,7 @@ class Music(commands.Cog):
 
                 vc.queue_embed = _generate_queue_embed(vc, interaction)
                 view.message = await interaction.followup.send(embed=vc.queue_embed, view=view)
-                view.message = await interaction.original_message()
+                view.message = await interaction.original_response()
 
                 if not self._update_queue_embed_time.is_running():
                     self._update_queue_embed_time.start(vc)
@@ -272,7 +300,7 @@ class Music(commands.Cog):
             else:
                 vc : wavelink.Player = interaction.guild.voice_client
                 volume /= 100
-                await vc.set_filter(wavelink.Filter(volume=volume), seek=True)
+                await _update_voice_parameters(self.filters, interaction, vc)
                 await interaction.followup.send(f"Now playing at {round(volume * 100)}% volume.")
                 return
 
@@ -292,6 +320,7 @@ class Music(commands.Cog):
             else:
                 vc : wavelink.Player = interaction.guild.voice_client
                 speed /= 100
+                await _update_voice_parameters(self.filters, interaction, vc)
                 await vc.set_filter(wavelink.filters.Filter(timescale=wavelink.filters.Timescale(speed=speed)), seek=True)
                 await interaction.followup.send(f"Now playing at {round(speed * 100)}% speed.")
                 return
@@ -311,13 +340,129 @@ class Music(commands.Cog):
             else:
                 vc: wavelink.Player = interaction.guild.voice_client
                 pitch /= 100
+                await _update_voice_parameters(self.filters, interaction, vc)
                 await vc.set_filter(wavelink.filters.Filter(timescale=wavelink.filters.Timescale(pitch=pitch)),seek=True)
                 await interaction.followup.send(f"Now playing at {round(pitch * 100)}% pitch.")
                 return
 
+    # @app_commands.command(name="filter", description="Modify various extraneous aspects of playback.")
+    # async def _filter(self, interaction : discord.Interaction, *, filter : typing.Optional[typing.Literal["Tremolo", "Vibrato", "Rotation", "Distortion", "Low Pass"]]):
+    #     if filter is None:
+    #         vc: wavelink.Player = interaction.guild.voice_client
+    #         fields_embed = discord.Embed(title="Current Filter Values", description="To change the values or properties of a filter, either reuse the command with a selected filter, or click a button below.", color=0xecc98e)
+    #         fields_embed.add_field(name="Tremolo", value="Frequency: {0} [0.0 - 5.0]\nDepth: {1} [0.0 - 1.0]".format(self.filters["Tremolo"].frequency if self.filters["Tremolo"] is not None else "Disabled", self.filters["Tremolo"].depth if self.filters["Tremolo"] is not None else "Disabled"), inline=False)
+    #         fields_embed.add_field(name="Vibrato", value="Frequency: {0} [0.0 - 5.0]\nDepth: {1} [0.0 - 1.0]".format(self.filters["Vibrato"].frequency if self.filters["Vibrato"] is not None else "Disabled", self.filters["Vibrato"].depth if self.filters["Vibrato"] is not None else "Disabled"), inline=False)
+    #         fields_embed.add_field(name="Rotation", value="Rotation Speed: {0} [-1.0 - 1.0]".format(self.filters["Rotation"].speed if self.filters["Rotation"] is not None else "Disabled"), inline=False)
+    #
+    #         fields_embed.add_field(name="Distortion", value="Sine Amplitude: {0} [-2.0 - 2.0] | Sine Offset: {1} [-2π - 2π]\nCosine Amplitude: {2} [-2.0 - 2.0] | Cosine Offset: {3} [-2π - 2π]\nTangent Amplitude: {4} [-2.0 - 2.0] | Tangent Offset: {5} [-2π - 2π]".format(
+    #             self.filters["Distortion"].sin_scale if self.filters["Distortion"] is not None else "Disabled",
+    #             self.filters["Distortion"].sin_offset if self.filters["Distortion"] is not None else "Disabled",
+    #             self.filters["Distortion"].cos_scale if self.filters["Distortion"] is not None else "Disabled",
+    #             self.filters["Distortion"].cos_offset if self.filters["Distortion"] is not None else "Disabled",
+    #             self.filters["Distortion"].tan_scale if self.filters["Distortion"] is not None else "Disabled",
+    #             self.filters["Distortion"].tan_offset if self.filters["Distortion"] is not None else "Disabled"
+    #         ), inline=False)
+    #
+    #         fields_embed.add_field(name="Low Pass", value="Smoothing: {0} [1 - 20]".format(self.filters["Low_Pass"].smoothing if self.filters["Low_Pass"] is not None else "Disabled"), inline=False)
+    #
+    #         view = FilterNav(self.filters, vc)
+    #         view.message = await interaction.response.send_message(embed=fields_embed, view=view, ephemeral=True)
+    #         view.message = await interaction.original_response()
+    #
+    #         await view.wait()
+    #     else:
+    #         pass
 
-async def setup(bot: commands.Bot):
-    await bot.add_cog(Music(bot))
+
+
+"""
+Purpose of this navigation component is to list the current state of all the filters for easy viewing.
+"""
+class FilterNav(discord.ui.View):
+    def __init__(self, filters, vc):
+        super().__init__()
+        self.timeout = 60
+        self.filters = filters
+        self.vc = vc
+
+    @discord.ui.button(label="Tremolo", style=discord.ButtonStyle.primary)
+    async def _tremolo(self, interaction : discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(TremoloModal(self.filters, self.vc))
+
+    @discord.ui.button(label="Vibrato", style=discord.ButtonStyle.primary)
+    async def _vibrato(self, interaction: discord.Interaction, button: discord.ui.Button):
+        pass
+
+    @discord.ui.button(label="Rotation", style=discord.ButtonStyle.primary)
+    async def _rotation(self, interaction: discord.Interaction, button: discord.ui.Button):
+        pass
+
+    @discord.ui.button(label="Low Pass", style=discord.ButtonStyle.primary)
+    async def _low_pass(self, interaction: discord.Interaction, button: discord.ui.Button):
+        pass
+
+    # More complex, needs to open up more buttons, or maybe a dropdown.
+    @discord.ui.button(label="Distortion", style=discord.ButtonStyle.primary)
+    async def _distortion(self, interaction: discord.Interaction, button: discord.ui.Button):
+        pass
+
+    @discord.ui.button(label="Close", style=discord.ButtonStyle.danger)
+    async def _close(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.message.delete()
+        self.stop()
+
+    async def on_timeout(self) -> None:
+        await self.message.delete()
+        self.stop()
+
+"""
+Base class for Modals regarding filters
+All defaults are automatically baked into the text input constructors for subclasses.
+"""
+class FilterModal(discord.ui.Modal, title="Placeholder"):
+    def __init__(self, filters, vc):
+        super().__init__()
+        self.filters = filters
+        self.vc = vc
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
+        if not isinstance(error, ValueError):
+            # Default error, should not occur but have it in case.
+            await interaction.response.send_message('Oops! Something went wrong.', ephemeral=True)
+        else:
+            # Error message is based on what the child class propagates.
+            await interaction.response.send_message(error, ephemeral=True)
+
+class TremoloModal(FilterModal, title="Edit Tremolo Values"):
+    def __init__(self, filters, vc):
+        super().__init__(filters, vc)
+
+    tremolo_freq = discord.ui.TextInput(
+        label="Input a frequency value between 0.0 and 5.0",
+        placeholder="Default value is 2.0",
+        default="2.0",
+        max_length=3,
+        required=True
+    )
+
+    tremolo_depth = discord.ui.TextInput(
+        label="Input a depth value between [0.0 - 1.0]",
+        placeholder="Default value is 0.5",
+        default="0.5",
+        max_length=3,
+        required=True
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not 0 <= float(self.tremolo_freq.value) <= 5:
+            raise ValueError("Invalid frequency specified, make sure it's between 0 and 5!")
+        if not 0 <= float(self.tremolo_depth.value) <= 1:
+            raise ValueError("Invalid depth specified, make sure it's between 0 and 1!")
+
+        self.filters["Tremolo"] = wavelink.Tremolo(frequency=float(self.tremolo_freq.value), depth=float(self.tremolo_depth.value))
+
+        await _update_voice_parameters(self.filters, interaction, self.vc)
+        await interaction.response.send_message("Successfully modified filter.", ephemeral=True)
 
 class MusicNav(discord.ui.View):
     global guild_id
@@ -403,6 +548,8 @@ class MusicNav(discord.ui.View):
         self.player.queue_embed = None
         self.stop()
 
+async def setup(bot: commands.Bot):
+    await bot.add_cog(Music(bot))
 
 
 

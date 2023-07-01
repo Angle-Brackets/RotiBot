@@ -1,8 +1,8 @@
 {
-  "version": "Alpha V1.70",
-  "summary": "More Music Features!",
+  "version": "Alpha V1.71",
+  "summary": "Music Hotfix",
   "changes": {
-    "New Commands":"-Added 3 new commands: /volume, /speed, and /pitch.\n-/volume: Changes the base volume of Roti by a given percentage.\n-/speed: Changes the base playback speed of Roti by a given percentage\n-/pitch: Changes the base playback pitch of Roti by a given percentage\n-Be mindful of others when using these commands!",
-    "Updated Commands":"-Removed various bound-related error messages as all commands are bounded by the slash command itself rather than in a conditional.\n-/queue now reflects the current volume, speed, and pitch, in addition to some new styling.\n-/help has been updated with the new commands."
+    "Internal Updates": "-Updated Lavalink jar.\n-Updated to the official Discord.py 2.0 release.\n-Updated to the official Wavelink 2.0 release.",
+    "Bug-fixes": "-Fixed music playback not working in the previous version.\n-Fixed Roti hanging on a call to the /generate command but was unable to fix the issue not letting images display.\n-Fixed functions not having correct parameters passed for filters and other music commands."
   }
 }

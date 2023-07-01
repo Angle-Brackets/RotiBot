@@ -1,6 +1,5 @@
-#ROTI BOT V1.70 ALPHA
+#ROTI BOT V1.71 ALPHA
 #BY SOUPA#0524, CURRENTLY WRITTEN IN PYTHON USING MONGO DATABASE FOR DATA.
-#Currently uses discord.py 2.0, which must be manually installed from the git.
 
 import discord
 import aiohttp
