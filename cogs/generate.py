@@ -20,7 +20,7 @@ class Generate(commands.GroupCog, group_name = "generate"):
     def __init__(self, bot : commands.Bot):
         super().__init__()
         self.bot = bot
-    
+
     def _generate_image(self, query):
         # Create an in-memory buffer to hold the image data
         headers = {"Accept": "image/png"}
@@ -39,6 +39,7 @@ class Generate(commands.GroupCog, group_name = "generate"):
 
         return image_buffer
         
+
     @app_commands.command(name="waifu", description="Have a randomly generated waifu appear. They do not exist sadly.")
     async def _gen_waifu(self, interaction : discord.Interaction):
         await interaction.response.defer()
