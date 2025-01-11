@@ -55,7 +55,7 @@
     }
   },
   "Music": {
-    "title": "Help for all of the music commands.",
+    "title": "Help for all of the music commands. This feature is currently **DISABLED** as of 01/10/2025.",
     "description": "Allows for Roti to play, pause, and queue music in a voice channel.",
     "command_base": "None",
     "emoji": ":notes:",
@@ -78,7 +78,7 @@
        }
      },
      "queue": {
-       "description": "Displays the current state of the music queue and the current song's remaining time. Queue is cleared when Roti is disconnected or when all users disconnect from a voice channel.",
+       "description": "Displays the current state of the music queue and the current song's remaining time. Queue is cleared when Roti is disconnected or when all users disconnect from a voice channel. Also displays visual icons for track controls.",
        "usage": "/queue (must be in a voice channel)",
        "arguments": "None"
      },
@@ -102,6 +102,27 @@
         "usage": "/loop [mode] (must be in a voice channel)",
         "arguments": {
           "mode": "Enable/Disable whether Roti is looping the current song."
+        }
+      },
+      "volume": {
+        "description": "Modifies the base music playback volume of Roti for **ALL** listeners.",
+        "usage": "/volume <volume>",
+        "arguments": {
+          "volume": "The percentage change in volume ranging from 0% to 500%. Default is 100%."
+        }
+      },
+      "speed": {
+        "description": "Modifies the base music playback speed of Roti for **ALL** listeners.",
+        "usage": "/speed <speed>",
+        "arguments": {
+          "speed": "The percentage change in speed ranging from 0% to 200%. Default is 100%."
+        }
+      },
+      "pitch": {
+        "description": "Modifies the base music playback pitch of Roti for **ALL** listeners.",
+        "usage": "/pitch <pitch>",
+        "arguments": {
+          "pitch": "The percentage change in pitch ranging from 0% to 200%. Default is 100%."
         }
       }
     }
@@ -213,6 +234,27 @@
           "tag": "A required field that is the unique identifier for this quote.",
           "default": "**OPTIONAL** field to store the given quote WITHOUT any replaceable portions, acting as a \"default\" quote for this tag.",
           "name": "**OPTIONAL** field to store who said this quote."
+        }
+      }
+    }
+  },
+  "Generate": {
+    "title": "Help for the generate command",
+    "description": "Generates images from Databases and AI!",
+    "command_base": "generate",
+    "emoji": ":factory:",
+    "commands": {
+      "waifu": {
+        "description": "Have a randomly generated waifu appear. They do not exist sadly..",
+        "usage": "/generate waifu",
+        "arguments": "None"
+      },
+      "image": {
+        "description": "Have an AI generate...anything! Use this command at your own risk!",
+        "usage": "/generate image [prompt] <style>",
+        "arguments": {
+          "prompt": "The image prompt given to the AI",
+          "style": "**OPTIONAL** This modifies the underlying model used to change the style of the image."
         }
       }
     }

@@ -3,6 +3,7 @@ import typing
 
 import discord
 import re
+import shlex
 import data
 import os, sys
 import random
@@ -17,8 +18,8 @@ def _add_talkback_phrase(serverID, trigger_phrases, response_phrases):
             res = ""
             t_data = db[serverID]["trigger_phrases"] #loads the current trigger data
             r_data = db[serverID]["response_phrases"] #loads the current response data
-            trigger_list = re.split(r'\s+(?=[^"]*(?:"[^"]*"[^"]*)*$)',trigger_phrases) #separates entries by spaces, quotes are used to group items
-            response_list = re.split(r'\s+(?=[^"]*(?:"[^"]*"[^"]*)*$)',response_phrases) #see above
+            trigger_list = shlex.split(trigger_phrases) #separates entries by spaces, quotes are used to group items
+            response_list = shlex.split(response_phrases) #see above
 
             if len(trigger_list) > 10 or len(response_list) > 10:
                 return "Failed to create new talkback action (greater than 10 triggers or responses given)."
@@ -83,7 +84,7 @@ def _generate_embed_and_triggers(guild, msg = "", list_enabled = False):
 
     if list_enabled:
         if not msg:
-            empty_embed = discord.Embed(title="List of all talkbacks in " + guild.name, description="React with ❌ to cancel the command, or ▶️ and ◀️ to scroll through each page.", color=0xecc98e)
+            empty_embed = discord.Embed(title="List of all talkbacks in " + guild.name, description="Navigate with the Buttons Below.", color=0xecc98e)
         else:
             empty_embed = discord.Embed(title="List of all talkbacks in " + guild.name + " found with keyword: " + "\"" + msg + "\"", description="React with ❌ to cancel the command, or ▶️ and ◀️ to scroll through each page.", color=0xecc98e)
     else:
@@ -201,7 +202,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         view = Navigation(pages, res, True)
 
         view.message = await interaction.followup.send(embed=res[0][page-1], view=view)
-        view.message = await interaction.original_message()
+        view.message = await interaction.original_response()
 
         await view.wait()
 
@@ -218,7 +219,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         view = Navigation(pages, embeds, False) #Only if pages > 1 will the navigation buttons appear.
 
         view.message = await interaction.followup.send(embed=embeds[page-1], view=view)
-        view.message = await interaction.original_message() #If I needed it in the button class
+        view.message = await interaction.original_response() #If I needed it in the button class
 
         await view.wait()
 
@@ -314,6 +315,16 @@ class Navigation(discord.ui.View):
         await interaction.response.send_message(content="Successfully deleted trigger/response pair: " + str(t)[1:-1] + "/" + str(r)[1:-1])
         await self.message.delete()
         self.stop()
+
+class TalkbackResView(discord.ui.View):
+    def __init__(self, msg, guild_id):
+        super().__init__()
+        self.guild_id = guild_id
+        self.timeout = db[guild_id]["talkback"]["duration"] if db[guild_id]["talkback"]["duration"] != 0 else None
+        self.msg = msg
+
+
+
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Talkback(bot))

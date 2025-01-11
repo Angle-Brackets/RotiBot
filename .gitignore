@@ -3,7 +3,7 @@
 /workspace.xml
 /.idea
 .env
-application.yaml
+application.*
 /logs
 **/__pycache__/
 **.pyc

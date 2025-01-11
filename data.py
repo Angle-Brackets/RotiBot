@@ -1,10 +1,10 @@
 import os
 import time
-import traceback
 
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from time import strftime, gmtime
+from enum import Enum
 
 load_dotenv(".env")
 cluster = MongoClient(os.getenv('DATABASE'))
@@ -38,12 +38,16 @@ DATA_STRUCTURE = {
         },
 
         "music": {
-            "looped": False,  # If its looped...duh
-            "speed": 1  # Speed of songs, x1 - x2 speed.
+            "looped": False,  # If its looped...duh (UNUSED)
+            "speed": 100,  # Speed of songs, x1 - x2 speed.
+            "volume": 100, #Base volume of Roti while playing music
+            "pitch": 100 # Pitch of the music, x0 to x5.
         }
     },
 }
 
+# Global used in the music.py file for /filter's modal
+FilterParams = Enum("DistortionType", ["TREMOLO", "VIBRATO", "ROTATION", "DISTORTION"])
 
 def update_database(guild):
     serverID = guild.id
