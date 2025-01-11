@@ -113,7 +113,7 @@ class Quote(commands.GroupCog, group_name="quote"):
 
         view = Navigation(len(all_embeds), all_embeds, False)
         view.message = await interaction.followup.send(embed=all_embeds[0], view=view)
-        view.message = await interaction.original_message()
+        view.message = await interaction.original_response()
 
         await view.wait()
 
@@ -154,7 +154,7 @@ class Quote(commands.GroupCog, group_name="quote"):
 
         view = Navigation(len(all_embeds), all_embeds, True)
         view.message = await interaction.followup.send(embed=all_embeds[0], view=view)
-        view.message = await interaction.original_message()
+        view.message = await interaction.original_response()
 
         await view.wait()
 
@@ -315,7 +315,7 @@ class Navigation(discord.ui.View):
         quote_num = int(selection.values[0][selection.values[0].index("#") + 1:])
         field_quote = None
         index = -1
-        regex = re.compile(f"^\[[{quote_num}]\]\.")
+        regex = re.compile(fr"^\[[{quote_num}]\]\.")
         for quote_field in self.embeds[self.current_page - 1].fields:
             if regex.match(quote_field.name) is not None:
                 field_quote = quote_field.value[0:147] if len(quote_field.value) >= 150 else quote_field.value

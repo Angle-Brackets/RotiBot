@@ -91,7 +91,7 @@ class Help(commands.Cog):
             embed = _generate_help_embed(view.page)["landing"]
 
         view.message = await interaction.followup.send(embed=embed, view=view)
-        view.message = await interaction.original_message() # Needed to delete the message when it times out
+        view.message = await interaction.original_response() # Needed to delete the message when it times out
 
         await view.wait()
 

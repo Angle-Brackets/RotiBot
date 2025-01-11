@@ -57,8 +57,9 @@ def _find_sections(sections, text, level = 0):
 class Wikipedia(commands.GroupCog, group_name="wikipedia"):
     def __init__(self, bot : commands.Bot):
         super().__init__()
+        self.user_agent = "RotiBot/1.0"
         self.bot = bot
-        self.wiki_search = wiki.Wikipedia(language="en", extract_format=wiki.ExtractFormat.WIKI)
+        self.wiki_search = wiki.Wikipedia(user_agent=self.user_agent, language="en", extract_format=wiki.ExtractFormat.WIKI)
 
     @app_commands.command(name="random", description="Grabs a random wikipedia article.")
     async def _wiki_random(self, interaction : discord.Interaction):
@@ -83,7 +84,7 @@ class Wikipedia(commands.GroupCog, group_name="wikipedia"):
 
         view = DisambNav()
         view.message = await interaction.followup.send(embed=embed, view=view)
-        view.message = await interaction.original_message()
+        view.message = await interaction.original_response()
 
         await view.wait()
 
@@ -110,13 +111,13 @@ class Wikipedia(commands.GroupCog, group_name="wikipedia"):
                     page_embed.add_field(name=new_page, value=page_data.summary[0:100] + "...", inline=False)
                     count += 1
             view.message = await interaction.followup.send(embed=page_embed, view=view)
-            view.message = await interaction.original_message()
+            view.message = await interaction.original_response()
 
             await view.wait()
         else:
             view = DisambNav()
             view.message = await interaction.followup.send(embed=_generate_page(page), view=view)
-            view.message = await interaction.original_message()
+            view.message = await interaction.original_response()
 
             await view.wait()
 

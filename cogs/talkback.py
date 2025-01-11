@@ -202,7 +202,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         view = Navigation(pages, res, True)
 
         view.message = await interaction.followup.send(embed=res[0][page-1], view=view)
-        view.message = await interaction.original_message()
+        view.message = await interaction.original_response()
 
         await view.wait()
 
@@ -219,7 +219,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         view = Navigation(pages, embeds, False) #Only if pages > 1 will the navigation buttons appear.
 
         view.message = await interaction.followup.send(embed=embeds[page-1], view=view)
-        view.message = await interaction.original_message() #If I needed it in the button class
+        view.message = await interaction.original_response() #If I needed it in the button class
 
         await view.wait()
 
