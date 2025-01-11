@@ -1,6 +1,5 @@
 import os
 import time
-import traceback
 
 from pymongo import MongoClient
 from dotenv import load_dotenv

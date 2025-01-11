@@ -316,5 +316,15 @@ class Navigation(discord.ui.View):
         await self.message.delete()
         self.stop()
 
+class TalkbackResView(discord.ui.View):
+    def __init__(self, msg, guild_id):
+        super().__init__()
+        self.guild_id = guild_id
+        self.timeout = db[guild_id]["talkback"]["duration"] if db[guild_id]["talkback"]["duration"] != 0 else None
+        self.msg = msg
+
+
+
+
 async def setup(bot: commands.Bot):
     await bot.add_cog(Talkback(bot))
