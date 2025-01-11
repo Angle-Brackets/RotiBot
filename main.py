@@ -1,4 +1,4 @@
-#ROTI BOT V1.75 ALPHA (2025 - 01 - 10)
+#ROTI BOT V1.76 ALPHA (2025 - 01 - 11)
 #BY @soupa., CURRENTLY WRITTEN IN PYTHON USING MONGO DATABASE FOR DATA.
 
 import discord
@@ -12,7 +12,7 @@ from data import update_database, delete_guild_entry
 
 #load credentials
 load_dotenv(".env")
-test_build = True
+test_build = False
 class Roti(commands.Bot):
     def __init__(self):
         super().__init__(
