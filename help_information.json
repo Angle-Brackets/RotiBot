@@ -55,7 +55,7 @@
     }
   },
   "Music": {
-    "title": "Help for all of the music commands.",
+    "title": "Help for all of the music commands. This feature is currently **DISABLED** as of 01/10/2025.",
     "description": "Allows for Roti to play, pause, and queue music in a voice channel.",
     "command_base": "None",
     "emoji": ":notes:",
@@ -240,24 +240,22 @@
   },
   "Generate": {
     "title": "Help for the generate command",
-    "description": "Generates images from an AI provided by boredhumans.com, check them out!",
+    "description": "Generates images from Databases and AI!",
     "command_base": "generate",
     "emoji": ":factory:",
     "commands": {
       "waifu": {
-        "description": "Generates a waifu from the AI, sadly they are not real.",
+        "description": "Have a randomly generated waifu appear. They do not exist sadly..",
         "usage": "/generate waifu",
         "arguments": "None"
       },
-      "quote": {
-        "description": "Generates a \"motivational\" quote from the AI.",
-        "usage": "/generate quote",
-        "arguments": "None"
-      },
-      "pizza": {
-        "description": "Generates a pizza from the AI, maybe they'll be appetizing.",
-        "usage": "/generate pizza",
-        "arguments": "None"
+      "image": {
+        "description": "Have an AI generate...anything! Use this command at your own risk!",
+        "usage": "/generate image [prompt] <style>",
+        "arguments": {
+          "prompt": "The image prompt given to the AI",
+          "style": "**OPTIONAL** This modifies the underlying model used to change the style of the image."
+        }
       }
     }
   },

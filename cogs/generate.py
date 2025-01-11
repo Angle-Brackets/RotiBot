@@ -15,10 +15,6 @@ from enum import Enum
 embed = discord.Embed(color=0xecc98e)
 models = ["Pro", "Realism", "Anime", "3D"] # Standard Model is used if None are Selected
 
-# Used to get AI images from the website, https://boredhumans.com/, check it out!
-# Doesn't work as of 6/30/23, not sure why.
-# Checked on 1/10/25, the website added anti-bot detection w/ cloudflare.
-
 class Generate(commands.GroupCog, group_name = "generate"):
     def __init__(self, bot : commands.Bot):
         super().__init__()
