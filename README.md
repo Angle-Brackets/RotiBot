@@ -12,7 +12,7 @@ Invite Roti to your server: https://bit.ly/3rNbV72
 - /quote to store phrases said by your friends, with the power to modify them at portions.
 - /wikipedia for querying wikipedia articles.
 - /generate for generating AI images.
-- /music to play music [Not working currently]
+- /music to play music [Not working currently].
 - /help and /changelog for additional help!
 
 
