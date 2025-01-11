@@ -169,22 +169,23 @@ class Talkback(commands.GroupCog, group_name="talkback"):
             for i in range(len(db[serverID]["trigger_phrases"])):
                 for j in range(len(db[serverID]["trigger_phrases"][i])):
                     rand = random.random()
+                    view = TalkbackResView(serverID, message.author)
                     if strict and _strict_match(db[serverID]["trigger_phrases"][i][j].casefold().strip(), msg.casefold()) and probability >= rand:
                         if delete_duration > 0:
                             #If duration > 0, it will delete after x seconds
-                            await message.channel.send(random.choice(db[serverID]["response_phrases"][i]), delete_after=delete_duration)
+                            await message.channel.send(random.choice(db[serverID]["response_phrases"][i]), delete_after=delete_duration, view=view)
                         else:
                             #If duration = 0 (negatives are banned), it is permanent.
-                            await message.channel.send(random.choice(db[serverID]["response_phrases"][i]))
+                            await message.channel.send(random.choice(db[serverID]["response_phrases"][i]), view=view)
                         return
 
                     elif not strict and db[serverID]["trigger_phrases"][i][j].casefold().strip() in msg.casefold() and probability >= rand:
                         if delete_duration > 0:
                             #If duration > 0, it will delete after x seconds
-                            await message.channel.send(random.choice(db[serverID]["response_phrases"][i]), delete_after=delete_duration)
+                            await message.channel.send(random.choice(db[serverID]["response_phrases"][i]), delete_after=delete_duration, view=view)
                         else:
                             #If duration = 0 (negatives are banned), it is permanent.
-                            await message.channel.send(random.choice(db[serverID]["response_phrases"][i]))
+                            await message.channel.send(random.choice(db[serverID]["response_phrases"][i]), view=view)
                         return
 
     @app_commands.command(name="add", description="Add a new talkback pair. Spaces separate elements, use quotes to group phrases.")
@@ -317,14 +318,27 @@ class Navigation(discord.ui.View):
         self.stop()
 
 class TalkbackResView(discord.ui.View):
-    def __init__(self, msg, guild_id):
+    def __init__(self, guild_id, triggeree):
         super().__init__()
         self.guild_id = guild_id
-        self.timeout = db[guild_id]["talkback"]["duration"] if db[guild_id]["talkback"]["duration"] != 0 else None
-        self.msg = msg
-
-
-
+        self.triggeree = triggeree # Who triggered the talkback
+    
+    @discord.ui.button(label='Delete', style=discord.ButtonStyle.red)
+    async def _delete(self, interaction : discord.Interaction, button : discord.ui.Button):
+        # If the user has the ability to delete messages or triggered the talkback themselves.
+        if interaction.user.id == self.triggeree or interaction.permissions.manage_messages:
+            try:
+                await interaction.message.delete()
+            except discord.Forbidden:
+                await interaction.response.send_message(
+                    "You do not have permission to delete this message.",
+                    ephemeral=True
+                )   
+        else:
+            await interaction.response.send_message(
+                "You do not have permission to delete this message.",
+                ephemeral=True
+            )
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Talkback(bot))

@@ -78,4 +78,10 @@ def get_data(serverID):
 
 
 def calculate_uptime():
-    return strftime("%d:%H:%M:%S", gmtime(time.time() - bot_start_time))
+    total_seconds = int(time.time() - bot_start_time)
+    days = total_seconds // 86400
+    hours = (total_seconds % 86400) // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+
+    return f"{days}d {hours}h {minutes}m {seconds}s"
