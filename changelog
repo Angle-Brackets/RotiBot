@@ -1,9 +1,9 @@
 {
-  "version": "Alpha V1.76",
-  "summary": "Update catch-up & AI upgrades",
+  "version": "Alpha V1.8",
+  "summary": "Finally Fixed Music!!!",
   "changes": {
-    "Internal Updates": "-Updated Lavalink jar to 4.0.\n-Updated to the official Wavelink 3.0 release.\n-The music commands are currently disabled pending a rewrite of the whole music system with wavelink 3.0.",
-    "Features": "-Roti has better AI capabilities with /generate now! Can generate images from any prompt and pull from a database for images as well.\n-You can now delete Talkbacks with a button popup now.\n-Can do /generate requests in parallel now.\n-Optimizations",
-    "Bugfixes": "-Fixed Roti hanging on /generate commands.\n-Fixed bugs related to the navigation panels with the latest discord.py release.\n-No longer save images to disk when using /generate."
+    "Internal Updates": "-Stability Improvements",
+    "Features": "-All music functionality has been readded and made more stable.",
+    "Bugfixes": "-A lot of bugs with the old music implementation"
   }
 }
