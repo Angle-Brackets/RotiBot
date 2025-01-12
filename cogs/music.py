@@ -10,6 +10,7 @@ from discord.ext import commands, tasks
 from discord import app_commands
 from dotenv import load_dotenv
 from data import db, push_data, FilterParams
+from time import strftime, gmtime
 
 """
 Some notes about music functionality:
@@ -28,33 +29,31 @@ def _is_connected(ctx):
 This function is used to update the parameters for the music bot at once, as they all must be set in order for
 the changes to appropriately take place.
 """
-async def _update_voice_parameters(filters : dict, interaction : discord.Interaction, vc : typing.Optional[wavelink.Player]):
+async def _update_voice_parameters(filters : wavelink.Filters, interaction : discord.Interaction, vc : typing.Optional[wavelink.Player]):
     v = db[interaction.guild.id]["settings"]["music"]["volume"] / 100
     s = db[interaction.guild.id]["settings"]["music"]["speed"] / 100
     p = db[interaction.guild.id]["settings"]["music"]["pitch"] / 100
 
+    filters.volume = v
+    filters.timescale.set(speed=s, pitch=p, rate=1.0)
+
     # Only apply to vc if there is an active song.
     if vc is not None:
-        await vc.set_filter(wavelink.filters.Filter(
-            volume=v,
-            timescale=wavelink.filters.Timescale(speed=s, pitch=p),
-            tremolo=filters["Tremolo"],
-            vibrato=filters["Vibrato"],
-            rotation=filters["Rotation"],
-            distortion=filters["Distortion"],
-            low_pass=filters["Low_Pass"]
-        ), seek=True)
+        await vc.set_filters(filters, seek=True)
 
 def _generate_queue_embed(vc : wavelink.Player, interaction : discord.Interaction):
-    queue = vc.queue
-    embed = discord.Embed(title="<a:animated_music:996261334272454736> Music Queue <a:animated_music:996261334272454736>", description="Currently {0}: [{1}]({2}) [{3}/{4}]".format("playing" if not vc.looped else "looping", queue.__getitem__(0), queue[0].info.get("uri"), time.strftime("%H:%M:%S", time.gmtime(vc.position)), time.strftime("%H:%M:%S", time.gmtime(queue.__getitem__(0).duration))), color=0xecc98e)
+    queue = vc.queue.copy()
+    if vc.playing:
+        queue.put_at(0, vc.current)
+    
+    embed = discord.Embed(title="<a:animated_music:996261334272454736> Music Queue <a:animated_music:996261334272454736>", description="Currently {0}: [{1}]({2}) [{3}/{4}]".format("playing" if not vc.looped else "looping", queue[0].title, queue[0].uri, time.strftime("%H:%M:%S", time.gmtime(vc.position)), time.strftime("%H:%M:%S", time.gmtime(queue[0].length))), color=0xecc98e)
     embed.set_footer(text="Special thanks to Wavelink & Pythonista for the library used for the music playback!")
 
     for i in range(len(queue)):
-        embed.add_field(name="{0}. {1} - [{2}]".format(i + 1, queue.__getitem__(i), time.strftime("%H:%M:%S", time.gmtime(queue.__getitem__(i).duration))), value=f"Requested by: <@{vc.queue_appenders[i]}>", inline=False)
+        embed.add_field(name="{0}. {1} - [{2}]".format(i + 1, queue[i], time.strftime("%H:%M:%S", time.gmtime(queue[i].length // 1000))), value=f"Requested by: <@{vc.queue_appenders[i]}>", inline=False)
 
     #Gets the thumbnail to the current video playing
-    embed.set_thumbnail(url=queue.__getitem__(0).thumb)
+    embed.set_thumbnail(url=vc.current.artwork)
     vc.queue_embed = embed
     vc.queue_interaction = interaction
     return embed
@@ -69,43 +68,32 @@ class Music(commands.Cog):
     def __init__(self, bot : commands.Bot):
         self.bot = bot
         # These are not saved when the bot exits the channel or when shut down.
-        self.filters = {
-            "Tremolo": wavelink.Tremolo(),
-            "Vibrato": None,
-            "Rotation": None,
-            "Distortion": None,
-            "Low_Pass": None,
-        }
+        self.filters = wavelink.Filters()
 
-        self.filters_default = self.filters.copy()
-
-        bot.loop.create_task(self.connect_nodes())
-
-    async def connect_nodes(self):
-        await self.bot.wait_until_ready()
-        await wavelink.NodePool.create_node(
-            bot=self.bot,
-            host=os.getenv("MUSIC_IP"),
-            port=2333,
-            password=os.getenv("MUSIC_PASS"),
-        )
+    @commands.Cog.listener()
+    async def on_wavelink_node_ready(self, payload: wavelink.NodeReadyEventPayload) -> None:
+        print(f"Wavelink Node connected: {payload.node} | Resumed {payload.resumed}")
 
     @tasks.loop(seconds=1)
     async def _update_queue_embed_time(self, vc : wavelink.Player):
         try:
-            if vc.queue_embed is not None and vc.queue_interaction is not None:
-                queue = vc.queue
-                vc.queue_embed.description = "Currently {0}: [{1}]({2}) [{3}/{4}]".format("playing" if not vc.looped else "looping", queue.__getitem__(0), queue[0].info.get("uri"), time.strftime("%H:%M:%S", time.gmtime(vc.position)), time.strftime("%H:%M:%S", time.gmtime(queue.__getitem__(0).duration)))
+            if vc and vc.queue_embed and vc.queue_interaction:
+                position_seconds = vc.position // 1000  # Convert milliseconds to seconds
+                duration_seconds = vc.current.length // 1000  # Convert milliseconds to seconds if needed
+
+                vc.queue_embed.description = "Currently {0}: [{1}]({2}) [{3}/{4}]".format(
+                    "playing" if not vc.looped else "looping",  # Status
+                    vc.current.title,  # Track title
+                    vc.current.uri,  # Track URI
+                    strftime("%H:%M:%S", gmtime(position_seconds)),  # Current position
+                    strftime("%H:%M:%S", gmtime(duration_seconds))  # Total duration
+                )
+                
                 await vc.queue_interaction.edit_original_response(embed=vc.queue_embed)
             else:
                 self._update_queue_embed_time.stop()
-        except:
+        except Exception as e:
             self._update_queue_embed_time.stop()
-
-
-    @commands.Cog.listener()
-    async def on_wavelink_node_ready(self, node : wavelink.Node):
-        print(f"Node: <{node.identifier}> is ready!")
 
     @commands.Cog.listener()
     #Handles disconnecting
@@ -124,22 +112,40 @@ class Music(commands.Cog):
                     await vc.disconnect()
                 except AttributeError as ae:
                     pass
+    
+    @commands.Cog.listener()
+    async def on_wavelink_track_start(self, payload : wavelink.TrackStartEventPayload):
+        vc : wavelink.Player | None = payload.player
+        if not vc:
+            await vc.home.send("An error has occured, try again later.")
+            return
+        
+        original : wavelink.Playable | None = payload.original # unmodified object with extra data associated.
+        track : wavelink.Playable = payload.track
+
+        await vc.home.send(f"Now playing **{track.title}**!")
 
     @commands.Cog.listener()
-    async def on_wavelink_track_end(self, player: wavelink.Player, track, reason):
-        # Handling looping of the song
-        if not player.queue.is_empty and not player.skipped and player.looped:
-            await player.play(player.queue.__getitem__(0))
+    async def on_wavelink_track_end(self, payload : wavelink.TrackEndEventPayload):
+        vc : wavelink.Player | None = payload.player
+        if not vc:
+            return
+
+        original : wavelink.Playable | None = payload.original # unmodified object with extra data associated.
+        track : wavelink.Playable = payload.track
+        reason :str = payload.reason
+
+        if not vc.skipped and vc.looped:
+            await vc.play(track)
         else:
-            if not player.queue.is_empty:
-                player.queue.get()  # Dequeues current song
-                player.queue_appenders.pop(0) # Dequeues latest person's name from queue of names
-                player.skipped = False
-                if not player.queue.is_empty:
-                    track = player.queue.__getitem__(0)  # DO NOT DEQUEUE THIS UNTIL ITS DONE!!!
-                    await player.play(track)
-                    _generate_queue_embed(player, player.queue_interaction)
-                # Not sure how to send a message to say a new song is playing...
+            vc.queue_appenders.pop(0)
+            vc.skipped = False
+            if not vc.queue.is_empty:
+                new_track = vc.queue.get()
+                await vc.play(new_track)
+
+                vc.queue_embed = _generate_queue_embed(vc, vc.queue_interaction)
+                await vc.queue_interaction.edit_original_response(embed=vc.queue_embed)
 
     @app_commands.command(name="join", description="Makes the bot join a valid voice channel")
     # This is not used in _play() as the wavelink context would not be transferred when joining.
@@ -150,7 +156,7 @@ class Music(commands.Cog):
         else:
             if not interaction.guild.voice_client:
                 vc : wavelink.Player = await interaction.user.voice.channel.connect(cls=wavelink.Player)
-
+                
                 vc.looped = False # Field to describe is current song is looped - overriden by skipped
                 vc.skipped = False # Field to describe if current song was skipped - used to override loop
                 vc.queue_appenders = list() # Field to list the names of the people that requested a song
@@ -164,6 +170,10 @@ class Music(commands.Cog):
     @app_commands.describe(query="A valid Youtube URL or Query.")
     async def _play(self, interaction : discord.Interaction, *, query : str):
         await interaction.response.defer()
+
+        if not interaction.guild:
+            return
+
         try:
             if not interaction.guild.voice_client:
                 vc: wavelink.Player = await interaction.user.voice.channel.connect(cls=wavelink.Player)
@@ -175,23 +185,34 @@ class Music(commands.Cog):
         except Exception as e:
             await interaction.followup.send("Unable to join channel, please specify a valid channel or join one.")
             return
+        
+        # Lock the player to this channel...
+        if not hasattr(vc, "home"):
+            vc.home = interaction.channel
+        elif vc.home != interaction.channel:
+            await interaction.followup.send(f"You can only play songs in {vc.home.mention}, as the player has already started there.", ephemeral=True)
+            return
 
-        try:
-            track = await wavelink.YouTubeTrack.search(query=query, return_first=True)
+        tracks : wavelink.Search = await wavelink.Playable.search(query)
 
-            if not vc.queue.is_empty:
-                vc.queue.put(track)
-                await interaction.followup.send(f"Added {track.title} to the queue!")
-                vc.queue_appenders.append(interaction.user.id)
-            else:
-                await _update_voice_parameters(self.filters, interaction, vc)
-
-                await vc.play(track)
-                vc.queue.put(track)
-                vc.queue_appenders.append(interaction.user.id)
-                await interaction.followup.send("Now playing: " + track.title)
-        except Exception as e:
-            await interaction.followup.send("Failed to search for given video. Try with another query!")
+        if not tracks:
+            await interaction.followup.send("Failed to search for given video. Try with another query!", ephemeral=True)
+            return
+        
+        if isinstance(tracks, wavelink.Playlist):
+            added : int = await vc.queue.put_wait(tracks)
+            await interaction.followup.send(f"Added the playlist **{tracks.name}** to the queue with {added} songs!")
+            vc.queue_appenders.append(interaction.user.id)
+        else:
+            track = wavelink.Playable = tracks[0]
+            await vc.queue.put_wait(track)
+            await interaction.followup.send(f"Added {track.title} to the queue!") 
+            vc.queue_appenders.append(interaction.user.id)
+        
+        if not vc.playing:
+            await _update_voice_parameters(self.filters, interaction, vc)
+            await vc.play(vc.queue.get())
+            
 
     @app_commands.command(name="pause", description="Pauses the music.")
     async def _pause(self, interaction : discord.Interaction):
@@ -202,8 +223,8 @@ class Music(commands.Cog):
         else:
             vc : wavelink.Player = interaction.guild.voice_client
 
-            if not vc.is_paused():
-                await vc.pause()
+            if not vc.paused:
+                await vc.pause(True)
                 await interaction.followup.send("Paused!")
             else:
                 await interaction.followup.send("Music is currently paused! Use /resume to resume music!")
@@ -216,10 +237,10 @@ class Music(commands.Cog):
         else:
             vc: wavelink.Player = interaction.guild.voice_client
 
-            if not vc.is_paused():
+            if not vc.paused:
                 await interaction.followup.send("Music is not currently paused! Use /pause to stop the music!")
             else:
-                await vc.resume()
+                await vc.pause(False)
                 await interaction.followup.send("Resumed!")
 
     @app_commands.command(name="loop", description="Loops the current track playing.")
@@ -244,11 +265,10 @@ class Music(commands.Cog):
             await interaction.followup.send("I am not in a voice channel!")
         else:
             vc: wavelink.Player = interaction.guild.voice_client
-            if not vc.queue.is_empty:
-                await interaction.followup.send(f"Skipped {vc.queue.__getitem__(0)}")
+            if not vc.queue.is_empty or vc.playing:
+                await interaction.followup.send(f"Skipped {vc.current.title}")
                 vc.skipped = True  # Necessary to override looped parameter
-                await vc.stop()
-                # Might seem strange, but this fires the on_wavelink_track_end event, so its automatically handled
+                await vc.skip(force=True) # Fires the end_track listener
             else:
                 await interaction.followup.send("Queue is empty.")
 
@@ -259,7 +279,7 @@ class Music(commands.Cog):
             await interaction.followup.send("You're not in a voice channel!")
         else:
             vc : wavelink.Player = interaction.guild.voice_client
-            if not vc.queue.is_empty:
+            if not vc.queue.is_empty or vc.playing:
                 view = MusicNav(vc, interaction.guild_id)
 
                 vc.queue_embed = _generate_queue_embed(vc, interaction)
@@ -267,6 +287,7 @@ class Music(commands.Cog):
                 view.message = await interaction.original_response()
 
                 if not self._update_queue_embed_time.is_running():
+                    vc.queue_interaction = interaction
                     self._update_queue_embed_time.start(vc)
 
                 await view.wait()
@@ -321,7 +342,6 @@ class Music(commands.Cog):
                 vc : wavelink.Player = interaction.guild.voice_client
                 speed /= 100
                 await _update_voice_parameters(self.filters, interaction, vc)
-                await vc.set_filter(wavelink.filters.Filter(timescale=wavelink.filters.Timescale(speed=speed)), seek=True)
                 await interaction.followup.send(f"Now playing at {round(speed * 100)}% speed.")
                 return
 
@@ -341,7 +361,6 @@ class Music(commands.Cog):
                 vc: wavelink.Player = interaction.guild.voice_client
                 pitch /= 100
                 await _update_voice_parameters(self.filters, interaction, vc)
-                await vc.set_filter(wavelink.filters.Filter(timescale=wavelink.filters.Timescale(pitch=pitch)),seek=True)
                 await interaction.followup.send(f"Now playing at {round(pitch * 100)}% pitch.")
                 return
 
@@ -482,16 +501,22 @@ class MusicNav(discord.ui.View):
     @discord.ui.button(emoji="<:playbtn:994759843749580861>", style=discord.ButtonStyle.secondary)
     async def _unpause(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.voice is not None or interaction.guild.voice_client:
-            await self.player.resume()
-            if self.player.is_paused():
-                await interaction.response.send_message("Unpaused!", ephemeral=True)
+            if not self.player.paused:
+                await interaction.response.send_message("Song is already unpaused!", ephemeral=True)
+                return
+
+            await self.player.pause(False)
+            await interaction.response.send_message("Unpaused!", ephemeral=True)
 
     @discord.ui.button(emoji="<:pausebtn:994763090413498388>", style=discord.ButtonStyle.secondary)
     async def _pause(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.voice is not None or interaction.guild.voice_client:
-            await self.player.pause()
-            if self.player.is_playing():
-                await interaction.response.send_message("Paused!", ephemeral=True)
+            if self.player.paused:
+                await interaction.response.send_message("Song already unpaused!", ephemeral=True)
+                return
+
+            await self.player.pause(True)
+            await interaction.response.send_message("Paused!", ephemeral=True)
 
     @discord.ui.button(emoji="<:loopicon:994754841710702733>", style=discord.ButtonStyle.secondary)
     async def _loop(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -505,10 +530,10 @@ class MusicNav(discord.ui.View):
     @discord.ui.button(emoji="<:skipbtn:994763472522977290>", style=discord.ButtonStyle.secondary)
     async def _skip(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.voice is not None or interaction.guild.voice_client:
-            if not self.player.queue.is_empty:
-                await interaction.response.send_message(f"Skipped {self.player.queue.__getitem__(0)}")
+            if not self.player.queue.is_empty or self.player.playing:
+                await interaction.response.send_message(f"Skipped {self.player.current}")
                 self.player.skipped = True  # Necessary to override looped parameter
-                await self.player.stop()
+                await self.player.skip(force=True)
                 await self.message.edit(embed=self.player.queue_embed)
 
     @discord.ui.button(emoji="<:disconnectbtn:996156534927130735>", style=discord.ButtonStyle.secondary)
@@ -550,7 +575,3 @@ class MusicNav(discord.ui.View):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Music(bot))
-
-
-
-

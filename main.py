@@ -4,6 +4,7 @@
 import discord
 import aiohttp
 import os
+import wavelink
 
 from dotenv import load_dotenv
 from discord.ext import commands
@@ -29,6 +30,10 @@ class Roti(commands.Bot):
         for cog_file in os.listdir("./cogs"):
             if cog_file.endswith(".py"):
                 await self.load_extension(f"cogs.{cog_file[:-3]}")
+        
+        # Music bot setup
+        nodes = [wavelink.Node(uri=fr"http://{os.getenv("MUSIC_IP")}:2333", password=os.getenv("MUSIC_PASS"))]
+        await wavelink.Pool.connect(nodes=nodes, client=self, cache_capacity=100)
 
         await roti.tree.sync()
 

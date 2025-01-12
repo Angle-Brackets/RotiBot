@@ -1,4 +1,4 @@
-# Roti V1.76 Alpha
+# Roti V1.8 Alpha
 
 
 A simple general use discord bot written in ``discord.py``.\
@@ -12,7 +12,7 @@ Invite Roti to your server: https://bit.ly/3rNbV72
 - /quote to store phrases said by your friends, with the power to modify them at portions.
 - /wikipedia for querying wikipedia articles.
 - /generate for generating AI images.
-- /music to play music [Not working currently].
+- A bunch of music commands!.
 - /help and /changelog for additional help!
 
 
