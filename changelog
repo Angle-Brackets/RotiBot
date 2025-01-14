@@ -1,9 +1,8 @@
 {
-  "version": "Alpha V1.8",
-  "summary": "Finally Fixed Music!!!",
+  "version": "Alpha V1.9",
+  "summary": "Code Execution",
   "changes": {
-    "Internal Updates": "-Stability Improvements",
-    "Features": "-All music functionality has been readded and made more stable.",
-    "Bugfixes": "-A lot of bugs with the old music implementation"
+    "Internal Updates": "-Stability Improvements (aka fixing bad code)",
+    "Features": "-Roti can now execute code provided through a file or typed in a modal!\n-Use /execute to enter code, /help for more information."
   }
 }
