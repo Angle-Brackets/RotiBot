@@ -1,7 +1,7 @@
 from pyston import PystonClient, File as PystonFile
 from pyston.models import Output
 from io import TextIOWrapper
-from typing import Set, List
+from typing import Set, List, Optional
 
 class RotiExecutionEngine():
     def __init__(self):
@@ -22,6 +22,13 @@ class RotiExecutionEngine():
         )
 
         return output
+
+    def validate_output(self, output : Output) -> Optional[str]:
+        # This basically never fires, you should look at the output.success block.
+        if output.compile_stage and not output.compile_stage.code and output.compile_stage.signal:
+            return f"An error has occured compiling with signal {output.compile_stage.signal}:\n{output.compile_stage.output}"
+        if not output.success:
+            return f"An error has occured running with signal {output.run_stage.signal} (You may have exceeded the size of stdout or your script timed out!):\n{output.run_stage.output}"
     
     async def get_languages(self) -> Set[str]:
         if not self._languages:
