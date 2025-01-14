@@ -1,5 +1,6 @@
 aiohappyeyeballs==2.4.4
 aiohttp==3.11.11
+aiopyston==1.2.1
 aiosignal==1.3.2
 appdirs==1.4.4
 asttokens==3.0.0

@@ -1,10 +1,12 @@
-#ROTI BOT V1.76 ALPHA (2025 - 01 - 11)
+#ROTI BOT V1.9 ALPHA (2025 - 01 - 13)
 #BY @soupa., CURRENTLY WRITTEN IN PYTHON USING MONGO DATABASE FOR DATA.
 
 import discord
 import aiohttp
 import os
 import wavelink
+import argparse
+import logging
 
 from dotenv import load_dotenv
 from discord.ext import commands
@@ -16,6 +18,14 @@ load_dotenv(".env")
 test_build = False
 class Roti(commands.Bot):
     def __init__(self):
+        logging.basicConfig(level="INFO")
+        self.logger = logging.getLogger(__name__)
+
+        # Flags to disable features during testing
+        self.parser = argparse.ArgumentParser()
+        self.parser.add_argument("--nomusic", action=argparse.BooleanOptionalAction, help="Disable Music Functionality")
+        self.args = self.parser.parse_args()
+
         super().__init__(
             command_prefix = "prefix",
             intents = discord.Intents.all(),
@@ -23,17 +33,20 @@ class Roti(commands.Bot):
         )
 
     async def on_ready(self):
-        print("Roti Bot Online, logged in as {0.user}".format(self))
+        self.logger.info("Roti Bot Online, logged in as %s", self.user)
 
     async def setup_hook(self):
         self.session = aiohttp.ClientSession()
         for cog_file in os.listdir("./cogs"):
             if cog_file.endswith(".py"):
                 await self.load_extension(f"cogs.{cog_file[:-3]}")
-        
+
         # Music bot setup
-        nodes = [wavelink.Node(uri=fr"http://{os.getenv("MUSIC_IP")}:2333", password=os.getenv("MUSIC_PASS"))]
-        await wavelink.Pool.connect(nodes=nodes, client=self, cache_capacity=100)
+        if not self.args.nomusic:
+            nodes = [wavelink.Node(uri=fr"http://{os.getenv("MUSIC_IP")}:2333", password=os.getenv("MUSIC_PASS"))]
+            await wavelink.Pool.connect(nodes=nodes, client=self, cache_capacity=100)
+        else:
+            self.logger.warning("Music Functionality is Disabled!")
 
         await roti.tree.sync()
 
@@ -63,7 +76,7 @@ class Roti(commands.Bot):
 
     async def on_guild_remove(self, guild : discord.Guild):
         delete_guild_entry(guild.id)
-        print("Deleted guild " + guild.name + "'s data")
+        self.logger.critical("Deleted guild %s's data.", guild.name)
 
 roti = Roti()
 roti.run(os.getenv('TOKEN') if not test_build else os.getenv('TEST_TOKEN'))

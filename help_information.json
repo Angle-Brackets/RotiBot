@@ -259,6 +259,30 @@
       }
     }
   },
+  "Execute": {
+    "title": "Help for the execute command",
+    "description": "Allows you to execute code through Roti with a variety of languages!",
+    "command_base": "execute",
+    "emoji": ":cd:",
+    "commands": {
+      "file": {
+        "description": "Roti will execute any code provided inside of a file and display the output. Be mindful that if your code has a large output or takes too long, Roti will exit early.",
+        "usage": "/execute file [language] [file] <arguments>",
+        "arguments": {
+          "language": "The programming language the file should execute with. There are many more than 25 languages, so try typing your favorite language!",
+          "file": "The text file that Roti will execute",
+          "arguments": "**OPTIONAL** The space-separated command line arguments Roti will enter."
+        }
+      },
+      "script": {
+        "description": "Roti will execute any code typed out inside of a text box and display the output. Be mindful that if your code has a large output or takes too long, Roti will exit early.",
+        "usage": "/execute script [language]",
+        "arguments": {
+          "language":"The programming language the file should execute with. There are many more than 25 languages, so try typing your favorite language!"
+        }
+      }
+    }
+  },
   "Changelog": {
     "title": "Help for the changelog command",
     "description": "Displays all of the recent updates to Roti!",
