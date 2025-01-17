@@ -8,6 +8,7 @@ import data
 import os, sys
 import random
 import time
+import asyncio
 
 from data import db
 from discord.ext import commands
@@ -221,11 +222,12 @@ class Talkback(commands.GroupCog, group_name="talkback"):
             )
         
         chat_history = "\n".join(formatted_messages)
-        response = self.brain.generate_ai_response(
-            prompt=f"{message.author.display_name} said {message.content} to you! You should respond with the current chat context provided with a similar tone to what this person said to you!",
-            context=chat_history,
-            context_format=msg_format,
-            model="llama"
+        response = await asyncio.to_thread(
+            self.brain.generate_ai_response, 
+            f"{message.author.display_name} said {message.content} to you! You should respond with the current chat context provided with a similar tone to what this person said to you!", 
+            chat_history, 
+            msg_format, 
+            "llama"
         )
 
         if not response:
@@ -247,6 +249,8 @@ class Talkback(commands.GroupCog, group_name="talkback"):
             return # Talkback happened, nothing more to do.
 
         # Try an AI message, the probability of this happening is related to the talkback probability as well.
+        if not await self._say_ai_talkback(message):
+            message.channel.send("An error has occured. Try again later", delete_after=5)
         await self._say_ai_talkback(message)
 
     @app_commands.command(name="add", description="Add a new talkback pair. Spaces separate elements, use quotes to group phrases.")

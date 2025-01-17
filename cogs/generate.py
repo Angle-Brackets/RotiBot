@@ -87,7 +87,3 @@ class Generate(commands.GroupCog, group_name = "generate"):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Generate(bot))
-
-
-
-

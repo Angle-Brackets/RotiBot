@@ -87,6 +87,7 @@ class RotiBrain:
         response = requests.post(url=url, json=payload, headers=headers)
         
         if response.status_code != 200:
+            print(response.status_code)
             return None
         
         # Sometimes the response isn't in the form I want, so there's a failsafe here in case.
