@@ -197,7 +197,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         view = TalkbackResView(serverID, message.author)
 
         # If the bot isn't mentioned and the probability isn't reached, no response.
-        if self.bot.user not in message.mentions and random.random() >= probability:
+        if probability <= 0 or (self.bot.user not in message.mentions and random.random() >= probability):
             return False # No response!
 
         channel : discord.TextChannel = message.channel

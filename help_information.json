@@ -155,10 +155,10 @@
         }
       },
       "talkback probability": {
-        "description": "Sets the probability that Roti will respond to a talkback trigger with a response",
+        "description": "Sets the probability that Roti will respond to a talkback trigger with a response. This also affects the chance for a random AI-response.",
         "usage": "/settings talkback probability <probability>",
         "arguments": {
-          "probability": "**OPTIONAL** argument to set the probability (an integer from 0 to 100) Roti will respond to a talkback trigger. If no argument is given it will return the current state."
+          "probability": "**OPTIONAL** argument to set the probability (an integer from 0 to 100) Roti will respond to a talkback trigger or randomly to a message with an AI-response. If no argument is given it will return the current state and 0% probability disables ALL talkback features including AI responses."
         }
       }
     }
@@ -255,6 +255,14 @@
         "arguments": {
           "prompt": "The image prompt given to the AI",
           "style": "**OPTIONAL** This modifies the underlying model used to change the style of the image."
+        }
+      },
+      "text": {
+        "description": "Have Roti respond to what you say! This is implemented into talkbacks as well, just ping Roti.",
+        "usage": "/generate text [prompt] <model>",
+        "arguments": {
+          "prompt": "The text prompt given to the AI.",
+          "model": "**OPTIONAL** This changes what model Roti uses internally to generate responses, try them all! A speaker means its uncensored, a speaker is censored."
         }
       }
     }

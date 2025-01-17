@@ -111,7 +111,7 @@ class RotiBrain:
                     name=model["name"],
                     type=model["type"],
                     censored=model["censored"],
-                    description=model["description"],
+                    description=f"{model['description']} {'🔊' if model['censored'] else '🔈'}",
                     base_model=model["baseModel"]
                 )
         else:
