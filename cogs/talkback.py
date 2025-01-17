@@ -251,6 +251,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         # Try an AI message, the probability of this happening is related to the talkback probability as well.
         if not await self._say_ai_talkback(message):
             message.channel.send("An error has occured. Try again later", delete_after=5)
+        await self._say_ai_talkback(message)
 
     @app_commands.command(name="add", description="Add a new talkback pair. Spaces separate elements, use quotes to group phrases.")
     async def _talkback_add(self, interaction : discord.Interaction, triggers : str, responses : str):
