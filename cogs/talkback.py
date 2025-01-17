@@ -11,6 +11,7 @@ import random
 from data import db
 from discord.ext import commands
 from discord import app_commands
+from utils.RotiBrain import RotiBrain
 
 #Adds new talkbacks, also automerges talkbacks if a duplicate trigger is given.
 def _add_talkback_phrase(serverID, trigger_phrases, response_phrases):
@@ -153,12 +154,12 @@ class Talkback(commands.GroupCog, group_name="talkback"):
     def __init__(self, bot : commands.Bot):
         super().__init__()
         self.bot = bot
-
-    @commands.Cog.listener()
-    async def on_message(self, message):
-        if message.author == self.bot.user or not db[message.guild.id]["settings"]["talkback"]["enabled"]:
-            return
-
+        self.brain = RotiBrain()
+    
+    async def _say_talkback(self, message : discord.Message) -> bool:
+        if self.bot.user in message.mentions:
+            return False # If the message mentions the bot directly, all talkbacks are bypassed and it goes straight to the AI.
+        
         msg = message.content
         serverID = message.guild.id
         delete_duration = db[serverID]["settings"]["talkback"]["duration"]
@@ -177,7 +178,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
                         else:
                             #If duration = 0 (negatives are banned), it is permanent.
                             await message.channel.send(random.choice(db[serverID]["response_phrases"][i]), view=view)
-                        return
+                        return True
 
                     elif not strict and db[serverID]["trigger_phrases"][i][j].casefold().strip() in msg.casefold() and probability >= rand:
                         if delete_duration > 0:
@@ -186,7 +187,60 @@ class Talkback(commands.GroupCog, group_name="talkback"):
                         else:
                             #If duration = 0 (negatives are banned), it is permanent.
                             await message.channel.send(random.choice(db[serverID]["response_phrases"][i]), view=view)
-                        return
+                        return True
+        return False # No talkback was found or none was triggered.
+
+    async def _say_ai_talkback(self, message : discord.Message) -> bool:
+        serverID = message.guild.id
+        delete_duration = db[serverID]["settings"]["talkback"]["duration"]
+        probability = db[serverID]["settings"]["talkback"]["res_probability"] / 100
+        view = TalkbackResView(serverID, message.author)
+
+        # If the bot isn't mentioned and the probability isn't reached, no response.
+        if probability <= 0 or (self.bot.user not in message.mentions and random.random() >= probability):
+            return False # No response!
+
+        channel : discord.TextChannel = message.channel
+        history : typing.List[discord.Message] = [msg async for msg in channel.history(limit=10, oldest_first=True)]
+        formatted_messages = []
+        # Format for the messages, this is important for the prompt!
+        msg_format = "THE CONTEXT FOLLOWS THE FORMAT [MSG START] USERNAME: MESSAGE_CONTENTS [MSG END] WITH EACH MESSAGE BLOCK RELATING TO ONE USER'S MESSAGE."
+
+        for msg in history:
+            username = msg.author.display_name
+            content = msg.content or "[NO CONTENT]" # Should always have content.
+            formatted_messages.append(
+                f"[MSG START] {username}: {content} [MSG END]"
+            )
+        
+        chat_history = "\n".join(formatted_messages)
+        response = self.brain.generate_ai_response(
+            prompt=f"{message.author.display_name} said {message.content} to you! You should respond with the current chat context provided with a similar tone to what this person said to you!",
+            context=chat_history,
+            context_format=msg_format,
+            model="llama"
+        )
+
+        if not response:
+            return False # Fail gracefully
+
+        if delete_duration:
+            await message.channel.send(response, view=view, delete_after=delete_duration)
+        else:
+            await message.channel.send(response, view=view)
+
+    @commands.Cog.listener()
+    async def on_message(self, message : discord.Message):
+        if message.author == self.bot.user or not db[message.guild.id]["settings"]["talkback"]["enabled"]:
+            return
+        
+        talkback_activated : bool = await self._say_talkback(message)
+
+        if talkback_activated:
+            return # Talkback happened, nothing more to do.
+
+        # Try an AI message, the probability of this happening is related to the talkback probability as well.
+        await self._say_ai_talkback(message)
 
     @app_commands.command(name="add", description="Add a new talkback pair. Spaces separate elements, use quotes to group phrases.")
     async def _talkback_add(self, interaction : discord.Interaction, triggers : str, responses : str):

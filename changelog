@@ -1,8 +1,8 @@
 {
-  "version": "Alpha V1.9",
-  "summary": "Code Execution",
+  "version": "Alpha V1.9.1",
+  "summary": "AI Text Generation and Snarkiness",
   "changes": {
-    "Internal Updates": "-Stability Improvements (aka fixing bad code)",
-    "Features": "-Roti can now execute code provided through a file or typed in a modal!\n-Use /execute to enter code, /help for more information."
+    "Internal Updates": "-Reorganized all AI features into a new class for cross-command support",
+    "Features": "-Roti can now generate text responses from prompts, use /generate text!\n-/settings talkback probability also affects the chance of random AI responses, set to 0 to completely disable them.\n-Roti has AI-powered talkbacks now, randomly or when pinged/replied to, Roti will respond with some response related to the conversation to be a *little* more annoying. ;)"
   }
 }
