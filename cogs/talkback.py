@@ -210,7 +210,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
 
         self.last_response = time.time()
         chat_history = "No chat history"
-        
+
         history : typing.List[discord.Message] = [msg async for msg in channel.history(limit=10)]
         formatted_messages = []
         # Format for the messages, this is important for the prompt!
