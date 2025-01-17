@@ -199,6 +199,8 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         delete_duration = db[serverID]["settings"]["talkback"]["duration"]
         probability = db[serverID]["settings"]["talkback"]["res_probability"] / 100
         view = TalkbackResView(serverID, message.author)
+        channel : discord.TextChannel = message.channel
+        permissions = channel.permissions_for(message.guild.me)
 
         if time.time() - self.last_response < self.cooldown:
             return False # This is to not overload the discord API.
@@ -208,18 +210,20 @@ class Talkback(commands.GroupCog, group_name="talkback"):
             return False # No response!
 
         self.last_response = time.time()
-        channel : discord.TextChannel = message.channel
-        history : typing.List[discord.Message] = [msg async for msg in channel.history(limit=10, oldest_first=True)]
-        formatted_messages = []
-        # Format for the messages, this is important for the prompt!
-        msg_format = "THE CONTEXT FOLLOWS THE FORMAT [MSG START] USERNAME: MESSAGE_CONTENTS [MSG END] WITH EACH MESSAGE BLOCK RELATING TO ONE USER'S MESSAGE."
+        chat_history = "No chat history"
+        
+        if permissions.read_message_history:
+            history : typing.List[discord.Message] = [msg async for msg in channel.history(limit=10, oldest_first=True)]
+            formatted_messages = []
+            # Format for the messages, this is important for the prompt!
+            msg_format = "THE CONTEXT FOLLOWS THE FORMAT [MSG START] USERNAME: MESSAGE_CONTENTS [MSG END] WITH EACH MESSAGE BLOCK RELATING TO ONE USER'S MESSAGE."
 
-        for msg in history:
-            username = msg.author.display_name
-            content = msg.content or "[NO CONTENT]" # Should always have content.
-            formatted_messages.append(
-                f"[MSG START] {username}: {content} [MSG END]"
-            )
+            for msg in history:
+                username = msg.author.display_name
+                content = msg.content or "[NO CONTENT]" # Should always have content.
+                formatted_messages.append(
+                    f"[MSG START] {username}: {content} [MSG END]"
+                )
         
         chat_history = "\n".join(formatted_messages)
         response = await asyncio.to_thread(
@@ -237,10 +241,11 @@ class Talkback(commands.GroupCog, group_name="talkback"):
             await message.channel.send(response, view=view, delete_after=delete_duration)
         else:
             await message.channel.send(response, view=view)
+        return True
 
     @commands.Cog.listener()
     async def on_message(self, message : discord.Message):
-        if message.author == self.bot.user or not db[message.guild.id]["settings"]["talkback"]["enabled"]:
+        if not message or message.author == self.bot.user or not db[message.guild.id]["settings"]["talkback"]["enabled"]:
             return
         
         talkback_activated : bool = await self._say_talkback(message)
@@ -249,9 +254,9 @@ class Talkback(commands.GroupCog, group_name="talkback"):
             return # Talkback happened, nothing more to do.
 
         # Try an AI message, the probability of this happening is related to the talkback probability as well.
-        if not await self._say_ai_talkback(message):
-            message.channel.send("An error has occured. Try again later", delete_after=5)
-        await self._say_ai_talkback(message)
+        ai_activated = await self._say_ai_talkback(message)
+        if not ai_activated:
+            await message.channel.send("An error has occured. Try again later", delete_after=5)
 
     @app_commands.command(name="add", description="Add a new talkback pair. Spaces separate elements, use quotes to group phrases.")
     async def _talkback_add(self, interaction : discord.Interaction, triggers : str, responses : str):
