@@ -200,7 +200,6 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         probability = db[serverID]["settings"]["talkback"]["res_probability"] / 100
         view = TalkbackResView(serverID, message.author)
         channel : discord.TextChannel = message.channel
-        permissions = channel.permissions_for(message.guild.me)
 
         if time.time() - self.last_response < self.cooldown:
             return False # This is to not overload the discord API.
@@ -211,19 +210,18 @@ class Talkback(commands.GroupCog, group_name="talkback"):
 
         self.last_response = time.time()
         chat_history = "No chat history"
-        
-        if permissions.read_message_history:
-            history : typing.List[discord.Message] = [msg async for msg in channel.history(limit=10, oldest_first=True)]
-            formatted_messages = []
-            # Format for the messages, this is important for the prompt!
-            msg_format = "THE CONTEXT FOLLOWS THE FORMAT [MSG START] USERNAME: MESSAGE_CONTENTS [MSG END] WITH EACH MESSAGE BLOCK RELATING TO ONE USER'S MESSAGE."
 
-            for msg in history:
-                username = msg.author.display_name
-                content = msg.content or "[NO CONTENT]" # Should always have content.
-                formatted_messages.append(
-                    f"[MSG START] {username}: {content} [MSG END]"
-                )
+        history : typing.List[discord.Message] = [msg async for msg in channel.history(limit=10)]
+        formatted_messages = []
+        # Format for the messages, this is important for the prompt!
+        msg_format = "THE CONTEXT FOLLOWS THE FORMAT [MSG START] USERNAME: MESSAGE_CONTENTS [MSG END] WITH EACH MESSAGE BLOCK RELATING TO ONE USER'S MESSAGE. THE MOST RECENT MESSAGE IS AT THE BOTTOM."
+
+        for msg in reversed(history):
+            username = msg.author.display_name
+            content = msg.content or "[NO CONTENT]" # Should always have content.
+            formatted_messages.append(
+                f"[MSG START] {username}: {content} [MSG END]"
+            )
         
         chat_history = "\n".join(formatted_messages)
         response = await asyncio.to_thread(
