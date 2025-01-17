@@ -1,9 +1,9 @@
 {
-  "version": "Alpha V1.9.2",
+  "version": "Alpha V1.9.3",
   "summary": "AI Text Generation and Snarkiness + Hotfix",
   "changes": {
     "Internal Updates": "-Reorganized all AI features into a new class for cross-command support",
     "Features": "-Roti can now generate text responses from prompts, use /generate text!\n-/settings talkback probability also affects the chance of random AI responses, set to 0 to completely disable them.\n-Roti has AI-powered talkbacks now, randomly or when pinged/replied to, Roti will respond with some response related to the conversation to be a *little* more annoying. ;)",
-    "Hotfix": "-Added a cooldown to the AI talkback to not overload the API in cases where talkbacks are near 100%."
+    "Hotfix": "-Added a cooldown to the AI talkback to not overload the API in cases where talkbacks are near 100%.\n-Fixed serious bug with chat histories not being tracked correctly."
   }
 }

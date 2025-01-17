@@ -1,4 +1,4 @@
-# Roti V1.9.2 Alpha
+# Roti V1.9.3 Alpha
 
 
 A simple general use discord bot written in ``discord.py``.\
