@@ -7,6 +7,7 @@ import shlex
 import data
 import os, sys
 import random
+import time
 
 from data import db
 from discord.ext import commands
@@ -155,6 +156,8 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         super().__init__()
         self.bot = bot
         self.brain = RotiBrain()
+        self.cooldown = 5 # 5 second cooldown for AI responses to not be rate limited.
+        self.last_response = 0
     
     async def _say_talkback(self, message : discord.Message) -> bool:
         if self.bot.user in message.mentions:
@@ -196,10 +199,14 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         probability = db[serverID]["settings"]["talkback"]["res_probability"] / 100
         view = TalkbackResView(serverID, message.author)
 
+        if time.time() - self.last_response < self.cooldown:
+            return False # This is to not overload the discord API.
+
         # If the bot isn't mentioned and the probability isn't reached, no response.
         if probability <= 0 or (self.bot.user not in message.mentions and random.random() >= probability):
             return False # No response!
 
+        self.last_response = time.time()
         channel : discord.TextChannel = message.channel
         history : typing.List[discord.Message] = [msg async for msg in channel.history(limit=10, oldest_first=True)]
         formatted_messages = []
