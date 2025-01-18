@@ -1,4 +1,4 @@
-#ROTI BOT V1.9.3 ALPHA (2025 - 01 - 17)
+#ROTI BOT V1.9.4 ALPHA (2025 - 01 - 17)
 #BY @soupa., CURRENTLY WRITTEN IN PYTHON USING MONGO DATABASE FOR DATA.
 
 import discord
@@ -15,7 +15,6 @@ from data import update_database, delete_guild_entry
 
 #load credentials
 load_dotenv(".env")
-test_build = False
 class Roti(commands.Bot):
     def __init__(self):
         logging.basicConfig(level="INFO")
@@ -24,12 +23,15 @@ class Roti(commands.Bot):
         # Flags to disable features during testing
         self.parser = argparse.ArgumentParser()
         self.parser.add_argument("--nomusic", action=argparse.BooleanOptionalAction, help="Disable Music Functionality")
+        self.parser.add_argument("--test", action=argparse.BooleanOptionalAction, help="Enable testing mode")
         self.args = self.parser.parse_args()
+
+        self.test_build = bool(self.args.test)
 
         super().__init__(
             command_prefix = "prefix",
             intents = discord.Intents.all(),
-            application_id = os.getenv('APPLICATION_ID') if not test_build else os.getenv('TEST_APPLICATION_ID')
+            application_id = os.getenv('APPLICATION_ID') if not self.test_build else os.getenv('TEST_APPLICATION_ID')
         )
 
     async def on_ready(self):
@@ -79,4 +81,4 @@ class Roti(commands.Bot):
         self.logger.critical("Deleted guild %s's data.", guild.name)
 
 roti = Roti()
-roti.run(os.getenv('TOKEN') if not test_build else os.getenv('TEST_TOKEN'))
+roti.run(os.getenv('TOKEN') if not roti.test_build else os.getenv('TEST_TOKEN'))

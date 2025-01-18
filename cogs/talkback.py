@@ -197,7 +197,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
     async def _say_ai_talkback(self, message : discord.Message) -> bool:
         serverID = message.guild.id
         delete_duration = db[serverID]["settings"]["talkback"]["duration"]
-        probability = db[serverID]["settings"]["talkback"]["res_probability"] / 100
+        probability = db[serverID]["settings"]["talkback"]["ai_probability"] / 100
         view = TalkbackResView(serverID, message.author)
         channel : discord.TextChannel = message.channel
 
@@ -252,9 +252,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
             return # Talkback happened, nothing more to do.
 
         # Try an AI message, the probability of this happening is related to the talkback probability as well.
-        ai_activated = await self._say_ai_talkback(message)
-        if not ai_activated:
-            await message.channel.send("An error has occured. Try again later", delete_after=5)
+        await self._say_ai_talkback(message)
 
     @app_commands.command(name="add", description="Add a new talkback pair. Spaces separate elements, use quotes to group phrases.")
     async def _talkback_add(self, interaction : discord.Interaction, triggers : str, responses : str):

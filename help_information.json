@@ -134,10 +134,10 @@
     "emoji": ":gear:",
     "commands": {
       "talkback enable": {
-        "description": "Toggles whether Roti will respond to talkback pairs.",
+        "description": "Toggles whether Roti will respond to talkback pairs and with with AI responses.",
         "usage": "/settings talkback enable <state>",
         "arguments": {
-          "state": "**OPTIONAL** argument to change whether Roti will respond to talkback triggers. If no argument is given it will return the current state."
+          "state": "**OPTIONAL** argument to change whether Roti will respond to talkback triggers and respond with AI responses. If no argument is given it will return the current state."
         }
       },
       "talkback strict": {
@@ -155,10 +155,17 @@
         }
       },
       "talkback probability": {
-        "description": "Sets the probability that Roti will respond to a talkback trigger with a response. This also affects the chance for a random AI-response.",
+        "description": "Sets the probability that Roti will respond to a talkback trigger with a response.",
         "usage": "/settings talkback probability <probability>",
         "arguments": {
-          "probability": "**OPTIONAL** argument to set the probability (an integer from 0 to 100) Roti will respond to a talkback trigger or randomly to a message with an AI-response. If no argument is given it will return the current state and 0% probability disables ALL talkback features including AI responses."
+          "probability": "**OPTIONAL** argument to set the probability (an integer from 0 to 100) Roti will respond to a talkback trigger or randomly to a message with an AI-response. If no argument is given it will return the current state and 0% probability disables ALL non-AI talkback features."
+        }
+      },
+      "talkback ai_probability": {
+        "description": "Sets the probability that Roti will respond randomly in a conversation with an AI response. If talkbacks are disabled, then no AI responses will randomly occur.",
+        "usage": "/settings talkback ai_probability <probability>",
+        "arguments": {
+          "probability": "**OPTIONAL** argument to set the probability (an integer from 0 to 100) Roti will respond randomly to a message with an AI-response. If no argument is given it will return the current state and 0% probability disables random AI responses."
         }
       }
     }
