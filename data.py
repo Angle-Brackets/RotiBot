@@ -3,8 +3,8 @@ import time
 
 from pymongo import MongoClient
 from dotenv import load_dotenv
-from time import strftime, gmtime
 from enum import Enum
+from copy import deepcopy
 
 load_dotenv(".env")
 cluster = MongoClient(os.getenv('DATABASE'))
@@ -12,12 +12,6 @@ cluster = MongoClient(os.getenv('DATABASE'))
 collections = cluster["Roti"]["data"]  # Actual MongoDB database
 db = dict()  # quick access to data, but must be updated when values changed
 bot_start_time = time.time()  # Used to calculate the uptime for the bot.
-
-# Takes data, puts into variable named db and keys the data using the serverID
-for data in collections.find({}):
-    db[data['server_id']] = data
-
-# To get a server's data, you need to do db[<server_id>][<category>] (ID IS NOT A STRING!)
 
 # This is like a template for the data.
 DATA_STRUCTURE = {
@@ -34,7 +28,8 @@ DATA_STRUCTURE = {
             "duration": 0,  # How long the message exists before being deleted, 0 is permanent.
             "strict": False,
             # Dictates if the bot will only look at substrings when responding, or will need EXACT matches of words to respond. (case ignored in both)
-            "res_probability": 100  # Percentage that the bot will respond to a talkback
+            "res_probability": 100,  # Percentage that the bot will respond to a talkback
+            "ai_probability": 5,
         },
 
         "music": {
@@ -49,6 +44,24 @@ DATA_STRUCTURE = {
 # Global used in the music.py file for /filter's modal
 FilterParams = Enum("DistortionType", ["TREMOLO", "VIBRATO", "ROTATION", "DISTORTION"])
 
+"""
+Recursively ensures all keys in `reference` exist in `target`.
+If a key is missing, it will be initialized with the default value from `reference`.
+"""
+def _recursive_dict_copy(target : dict, reference : dict):
+    for key, default_value in reference.items():
+        if key not in target:
+            target[key] = deepcopy(default_value)
+        elif isinstance(default_value, dict):
+            # Recurse!
+            _recursive_dict_copy(target[key], default_value)
+
+# Takes data, puts into variable named db and keys the data using the serverID
+# To get a server's data, you need to do db[<server_id>][<category>] (ID IS A INTEGER!)
+for data in collections.find({}):
+    db[data['server_id']] = data
+    _recursive_dict_copy(db[data['server_id']], DATA_STRUCTURE)
+
 def update_database(guild):
     serverID = guild.id
 
@@ -62,7 +75,7 @@ def update_database(guild):
 
 # Updates the database with the given key.
 # Ex. passing key = "trigger_phrases" will appropriately update the trigger database for the given server
-def push_data(serverID, key: str):
+def push_data(serverID : int, key: str):
     try:
         collections.update_one({"server_id": serverID}, {"$set": {key: db[serverID][key]}})
     except Exception as e:
@@ -75,7 +88,6 @@ def delete_guild_entry(serverID):
 
 def get_data(serverID):
     return db[str(serverID)]
-
 
 def calculate_uptime():
     total_seconds = int(time.time() - bot_start_time)

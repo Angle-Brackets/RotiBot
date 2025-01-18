@@ -13,7 +13,7 @@ class Settings(commands.GroupCog, group_name="settings"):
 
     talkback_group = app_commands.Group(name="talkback", description="Change the settings regarding the /talkback command.")
 
-    @talkback_group.command(name="enabled", description="Toggles if Roti will respond to talkback triggers with a response at all.")
+    @talkback_group.command(name="enable", description="Toggles AI responses and if Roti will respond to talkback triggers with a response at all.")
     async def _talkback_enable(self, interaction : discord.Interaction, state : typing.Optional[bool]):
         await interaction.response.defer()
         currentState = db[interaction.guild_id]["settings"]["talkback"]["enabled"]
@@ -59,6 +59,17 @@ class Settings(commands.GroupCog, group_name="settings"):
             await interaction.followup.send("Currently, I have a {0}% chance to respond to talkback triggers.".format(currentProb))
         else:
             db[interaction.guild_id]["settings"]["talkback"]["res_probability"] = probability
+            data.push_data(interaction.guild_id, "settings")
+            await interaction.followup.send("Successfully set probability to respond to talkbacks to {0}%".format(probability))
+
+    @talkback_group.command(name="ai_probability", description="Probability an AI response will occur, percentage from 0 - 100%.")
+    async def _talkback_ai_probability(self, interaction : discord.Interaction, probability : typing.Optional[app_commands.Range[int, 0, 100]]):
+        await interaction.response.defer()
+        currentProb = db[interaction.guild_id]["settings"]["talkback"]["ai_probability"]
+        if not probability:
+            await interaction.followup.send("Currently, I have a {0}% chance to respond to talkback triggers.".format(currentProb))
+        else:
+            db[interaction.guild_id]["settings"]["talkback"]["ai_probability"] = probability
             data.push_data(interaction.guild_id, "settings")
             await interaction.followup.send("Successfully set probability to respond to talkbacks to {0}%".format(probability))
 
