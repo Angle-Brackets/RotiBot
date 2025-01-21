@@ -1,5 +1,6 @@
 import requests
 import random
+import logging
 
 from typing import Dict, List, Optional
 from io import BytesIO
@@ -33,7 +34,8 @@ class RotiBrain:
         self.behavior_prompt : str = _ROTI_BEHAVIOR_PROMPT
         self.text_models : Dict[str, TextModel] = self._get_text_models()
         self.image_models : List[str] = ["Pro", "Realism", "Anime", "3D"] # Standard Model is used if None are Selected
-    
+        self.logger = logging.getLogger(__name__)
+
     # Generates an image with a given query.
     def generate_image(self, prompt, style) -> BytesIO:
         seed = random.randint(0, 10*100)
@@ -87,7 +89,7 @@ class RotiBrain:
         response = requests.post(url=url, json=payload, headers=headers)
         
         if response.status_code != 200:
-            print(response.status_code)
+            self.logger.warning("Generate AI Response responded with response code: %s", response.status_code)
             return None
         
         # Sometimes the response isn't in the form I want, so there's a failsafe here in case.
@@ -116,7 +118,7 @@ class RotiBrain:
                     base_model=model["baseModel"]
                 )
         else:
-            print(f"An error has occured getting text models!")
+            self.logger.critical("Could not retrieve text models! Text Generation will NOT work. Response code: %s", response.status_code)
         
         return models
     

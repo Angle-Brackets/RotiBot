@@ -5,6 +5,7 @@ import discord
 import wavelink
 import time
 import random
+import logging
 
 from discord.ext import commands, tasks
 from discord import app_commands
@@ -67,12 +68,13 @@ the song finishes rather than when it starts in order to display all the songs i
 class Music(commands.Cog):
     def __init__(self, bot : commands.Bot):
         self.bot = bot
+        self.logger = logging.getLogger(__name__)
         # These are not saved when the bot exits the channel or when shut down.
         self.filters = wavelink.Filters()
 
     @commands.Cog.listener()
     async def on_wavelink_node_ready(self, payload: wavelink.NodeReadyEventPayload) -> None:
-        print(f"Wavelink Node connected: {payload.node} | Resumed {payload.resumed}")
+        self.logger.info("Wavelink Node connected: %s | Resumed %s", payload.node, payload.resumed)
 
     @tasks.loop(seconds=1)
     async def _update_queue_embed_time(self, vc : wavelink.Player):

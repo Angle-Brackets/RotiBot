@@ -9,6 +9,7 @@ import os, sys
 import random
 import time
 import asyncio
+import logging
 
 from data import db
 from discord.ext import commands
@@ -16,7 +17,7 @@ from discord import app_commands
 from utils.RotiBrain import RotiBrain
 
 #Adds new talkbacks, also automerges talkbacks if a duplicate trigger is given.
-def _add_talkback_phrase(serverID, trigger_phrases, response_phrases):
+def _add_talkback_phrase(serverID, trigger_phrases, response_phrases, logger : typing.Optional[logging.Logger]):
         try:
             res = ""
             t_data = db[serverID]["trigger_phrases"] #loads the current trigger data
@@ -63,10 +64,8 @@ def _add_talkback_phrase(serverID, trigger_phrases, response_phrases):
 
             return "Successfully created new talkback." if not res else (res + "Successfully added new talkback.")
         except Exception as e:
-            exc_type, exc_obj, exc_tb = sys.exc_info()
-            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-            print(exc_type, fname, exc_tb.tb_lineno)
-            print(e)
+            if logger:
+                logger.warning("Failed to create new talkback action with given traceback:\n%s", e)
             return "Failed to create new talkback action"
 
 #This function is quite complex, in essence this function finds the triggers that most similarly match the given keyword and returns them, while also formatting the embed that stores them all.
@@ -156,6 +155,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
     def __init__(self, bot : commands.Bot):
         super().__init__()
         self.bot = bot
+        self.logger = logging.getLogger(__name__)
         self.brain = RotiBrain()
         self.cooldown = 5 # 5 second cooldown for AI responses to not be rate limited.
         self.last_response = 0
@@ -257,7 +257,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
     @app_commands.command(name="add", description="Add a new talkback pair. Spaces separate elements, use quotes to group phrases.")
     async def _talkback_add(self, interaction : discord.Interaction, triggers : str, responses : str):
         await interaction.response.defer()
-        notif = _add_talkback_phrase(interaction.guild_id, str(triggers), str(responses))
+        notif = _add_talkback_phrase(interaction.guild_id, str(triggers), str(responses), self.logger)
         await interaction.followup.send(notif)
 
     @app_commands.command(name="remove", description="Remove a current talkback trigger/response pair")
