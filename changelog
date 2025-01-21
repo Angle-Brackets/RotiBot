@@ -1,8 +1,8 @@
 {
-  "version": "Alpha V1.9.4",
+  "version": "Alpha V1.9.4.1",
   "summary": "AI Settings",
   "changes": {
-    "Internal Updates": "-Reorganized all AI features into a new class for cross-command support",
+    "Internal Updates": "-Reorganized all AI features into a new class for cross-command support.\n-Debug commands moved to be prefix commands to hide them from general use.",
     "Features": "-Roti can now generate text responses from prompts, use /generate text!\n-/settings talkback probability also affects the chance of random AI responses, set to 0 to completely disable them.\n-Roti has AI-powered talkbacks now, randomly or when pinged/replied to, Roti will respond with some response related to the conversation to be a *little* more annoying. ;)\n-You can adjust how frequently you'd like Roti to respond to you using the /settings talkback ai_probability command now."
   }
 }

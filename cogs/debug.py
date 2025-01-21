@@ -14,18 +14,48 @@ class Debug(commands.Cog):
         super().__init__()
         self.bot = bot
 
-    # Developer only commands.
+    # Developer-only commands as message commands.
     @commands.is_owner()
-    @app_commands.command(name="shuffle_status", description="DEBUG: Changes the bot's status")
-    async def _shuffle_status(self, interaction: discord.Interaction):
+    @commands.command(name="shuffle_status", help="DEBUG: Changes the bot's status")
+    async def _shuffle_status(self, ctx: commands.Context):
         await self.bot.change_presence(activity=discord.Activity(name=choose_motd(self.bot.activity.name if self.bot.activity is not None else None), type=1))
-        await interaction.response.send_message("Shuffled!", ephemeral=True)
+        await ctx.send("Shuffled!", ephemeral=True)
 
     @commands.is_owner()
-    @app_commands.command(name="say", description="DEBUG: Make Roti say anything")
-    async def _say(self, interaction : discord.Interaction, text : str):
-        await interaction.response.defer()
-        await interaction.followup.send(text)
+    @commands.command(name="say", help="DEBUG: Make Roti say anything")
+    async def _say(self, ctx: commands.Context, *, text: str):
+        await ctx.message.delete()  # Optionally delete the original message
+        await ctx.send(text)
+
+    @commands.is_owner()
+    @commands.command(name="reload", help="DEBUG: Hot loads all commands")
+    async def _reload(self, ctx: commands.Context):
+        reloaded = []
+        failed = []
+        for extension in list(self.bot.extensions.keys()):
+            try:
+                await self.bot.reload_extension(extension)
+            except commands.ExtensionError:
+                failed.append(extension)
+            except commands.ExtensionNotLoaded:
+                continue
+            else:
+                reloaded.append(extension)
+
+        result = f"Successfully Reloaded:\n{', '.join(reloaded)}\n\nFailed to reload:\n{', '.join(failed)}"
+        await ctx.send(result,ephemeral=True)
+
+    @commands.is_owner()
+    @commands.command(name="leave", help="DEBUG: Instructs Roti to leave a server")
+    async def _leave(self, ctx: commands.Context, guild_id: int):
+        guild = discord.utils.get(self.bot.guilds, id=guild_id)
+        
+        if guild:
+            await guild.leave()
+            await ctx.send(f"Successfully left {guild.name}", ephemeral=True)
+        else:
+            await ctx.send("Invalid guild ID or Roti is not in a server with that ID.", ephemeral=True)
+        await ctx.message.delete()
 
     @commands.is_owner()
     @app_commands.command(name="reload", description="DEBUG: Hot loads all commands")
