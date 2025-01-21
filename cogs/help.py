@@ -97,7 +97,7 @@ class Help(commands.Cog):
 
     @app_commands.command(name="changelog", description="Displays the latest changes to Roti!")
     async def _changelog(self, interaction : discord.Interaction):
-        await interaction.response.send_message(embed=_generate_changelog_embed())
+        await interaction.response.send_message(embed=_generate_changelog_embed(), ephemeral=True, delete_after=10)
 
 #Generates the options for the view object
 #If the page is None, generates the general page that lists all of the categories, otherwise will generate category-specific choices.

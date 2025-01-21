@@ -66,7 +66,7 @@ class Settings(commands.GroupCog, group_name="settings"):
     async def _talkback_ai_probability(self, interaction : discord.Interaction, probability : typing.Optional[app_commands.Range[int, 0, 100]]):
         await interaction.response.defer()
         currentProb = db[interaction.guild_id]["settings"]["talkback"]["ai_probability"]
-        if not probability:
+        if probability is None:
             await interaction.followup.send("Currently, I have a {0}% chance to respond to talkback triggers.".format(currentProb))
         else:
             db[interaction.guild_id]["settings"]["talkback"]["ai_probability"] = probability

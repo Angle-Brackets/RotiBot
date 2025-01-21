@@ -29,7 +29,7 @@ class Roti(commands.Bot):
         self.test_build = bool(self.args.test)
 
         super().__init__(
-            command_prefix = "prefix",
+            command_prefix = "$",
             intents = discord.Intents.all(),
             application_id = os.getenv('APPLICATION_ID') if not self.test_build else os.getenv('TEST_APPLICATION_ID')
         )
