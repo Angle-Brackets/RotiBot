@@ -1,4 +1,6 @@
 import discord
+import pathlib
+import os
 
 from .motd import choose_motd
 from discord.ext import commands
@@ -54,6 +56,25 @@ class Debug(commands.Cog):
         else:
             await ctx.send("Invalid guild ID or Roti is not in a server with that ID.", ephemeral=True)
         await ctx.message.delete()
+
+    @commands.is_owner()
+    @app_commands.command(name="reload", description="DEBUG: Hot loads all commands")
+    async def _reload(self, interaction : discord.Interaction):
+        reloaded = []
+        failed = []
+        for extension in list(self.bot.extensions.keys()):
+            # From: https://gist.github.com/AXVin/08ed554a458fc7aee4da162f4c53d086
+            try:
+                await self.bot.reload_extension(extension)
+            except commands.ExtensionError:
+                failed.append(extension)
+            except commands.ExtensionNotLoaded:
+                continue
+            else:
+                reloaded.append(extension)
+
+        result = f"Successfully Reloaded:\n{"\n".join(reloaded)}\n\nFailed to reload:\n{"\n".join(failed)}"
+        await interaction.response.send_message(result, ephemeral=True)
 
     # Misc Debug Commands - Anyone can use.
     @app_commands.command(name="ping", description="DEBUG: Gets the latency of the bot")
