@@ -1,8 +1,9 @@
 import discord
 import logging
 
+from returns.result import Result, Success, Failure
 from io import TextIOWrapper, BytesIO
-from typing import List, Optional, Callable, Union, Tuple
+from typing import List, Optional, Callable
 from utils.ExecutionEngine import RotiExecutionEngine
 from discord.ext import commands
 from discord import app_commands
@@ -30,7 +31,7 @@ class Execute(commands.GroupCog, group_name="execute"):
         self.languages = list(await self.engine.get_languages())
         self.languages.sort()
 
-    def _language_options(self, current):
+    def _language_options(self, current) -> List[app_commands.Choice]:
         choices = [
             app_commands.Choice(name=language.title(), value=language)
             for language in self.languages
@@ -49,11 +50,10 @@ class Execute(commands.GroupCog, group_name="execute"):
             return f"Not a text file!"
     
     """
-    This function will execute the given code in a TextIOWrapper and return an Embed with the output in a tuple.
-    If the function succeeded, the tuple will have its first argument be True, False otherwise. This is similar to 
-    a Rust Result<T, E> type.
+    This function will execute the given code in a TextIOWrapper and return an Embed with the output in a Result type.
+    The Success condition has a good tuple and the failure condition has the failure tuple.
     """
-    async def _execute(self, language : str, filename : str, arguments : str, code : TextIOWrapper) -> Tuple[bool, discord.Embed]:
+    async def _execute(self, language : str, filename : str, arguments : str, code : TextIOWrapper) -> Result[discord.Embed, discord.Embed]:
         output : Output = await self.engine.execute(
             language=language,
             file=code,
@@ -63,13 +63,13 @@ class Execute(commands.GroupCog, group_name="execute"):
         embed = self.base_embed.copy()
         embed.title = f"{filename} Output"[:self.title_limit]
 
-        error = self.engine.validate_output(output)
-        if error:
-            embed.description = error[:self.output_limit]
-            return (False, embed)
-        
-        embed.description = output.run_stage.output[:self.output_limit]
-        return (True, embed)
+        match self.engine.validate_output(output):
+            case Success(_):
+                embed.description = output.run_stage.output[:self.output_limit]
+                return Success(embed)
+            case Failure(error):
+                embed.description = error[:self.output_limit]
+                return Failure(embed)
 
     @app_commands.describe(language="The programming language you want to use! There are more than 25 available, so let autocomplete show you them all.", file="The file you wish to upload and run code with. UTF-8 Only.", arguments="Space separated list of command line arguments you want to pass.")
     @app_commands.command(name="file", description="Run code in a provided file.")
@@ -82,9 +82,11 @@ class Execute(commands.GroupCog, group_name="execute"):
             return
         
         code : TextIOWrapper = TextIOWrapper(BytesIO(await file.read()), encoding="utf-8")
-        _, embed = await self._execute(language, file.filename, arguments, code)
 
-        await interaction.followup.send(embed=embed, ephemeral=False)
+        # Result mode doesn't matter here.
+        match await self._execute(language, file.filename, arguments, code):
+            case Success(embed) | Failure(embed):
+                await interaction.followup.send(embed=embed, ephemeral=False)
     
     @app_commands.command(name="script", description="Write a snippet of code to run.")
     async def _execute_script(self, interaction : discord.Interaction, language : str):
@@ -99,7 +101,7 @@ class Execute(commands.GroupCog, group_name="execute"):
 class CodeEditorModal(discord.ui.Modal, title="Write a Script!"):
     def __init__(self, 
                  language,
-                 execute_func : Callable[[Execute, str, str, str, TextIOWrapper], Tuple[bool, discord.Embed]] 
+                 execute_func : Callable[[Execute, str, str, str, TextIOWrapper], Result[discord.Embed, discord.Embed]] 
         ):
         super().__init__()
         self.language = language
@@ -136,16 +138,11 @@ class CodeEditorModal(discord.ui.Modal, title="Write a Script!"):
         code = TextIOWrapper(BytesIO(self.script.value.encode("utf-8")), encoding="utf-8")
         args = self.arguments.value
 
-        # No special validation needed here.
-        result, embed = await self._execute_func(self.language, script_title, args, code)
-
-        if not result:
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            self.stop()
-            return
-        
-        await interaction.response.send_message(embed=embed)
-
+        match await self._execute_func(self.language, script_title, args, code):
+            case Success(embed):
+                await interaction.response.send_message(embed=embed)
+            case Failure(embed):
+                await interaction.response.send_message(embed=embed, ephemeral=True)
 
 async def setup(bot : commands.Bot):
     cog = Execute(bot)
