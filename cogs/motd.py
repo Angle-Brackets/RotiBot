@@ -1,6 +1,8 @@
 import discord
 import random
 import data
+import logging
+
 from discord import app_commands
 from discord.ext import commands, tasks
 from data import db
@@ -20,6 +22,7 @@ class Motd(commands.GroupCog, group_name="motd"):
     def __init__(self, bot: commands.Bot):
         super().__init__()
         self.bot = bot
+        self.logger = logging.getLogger(__name__)
         self.motd_swap.start()
 
     @app_commands.describe(motd = "A phrase to displayed in Roti's status.")
@@ -67,8 +70,9 @@ class Motd(commands.GroupCog, group_name="motd"):
 
     @motd_swap.before_loop
     async def startup(self):
-        print("Initializing...")
+        self.logger.info("Initializing MOTD...")
         await self.bot.wait_until_ready()
+        self.logger.info("MOTD Initialization Complete.")
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Motd(bot))

@@ -390,7 +390,6 @@ class Say_Replacement_Modal(discord.ui.Modal, title="Say a replaceable quote!"):
     )
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
-        print(error)
         await interaction.response.send_message('Oops! Something went wrong.', ephemeral=True)
 
     async def on_submit(self, interaction: discord.Interaction):

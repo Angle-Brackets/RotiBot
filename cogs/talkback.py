@@ -5,18 +5,27 @@ import discord
 import re
 import shlex
 import data
-import os, sys
 import random
 import time
 import asyncio
+import logging
 
 from data import db
 from discord.ext import commands
 from discord import app_commands
 from utils.RotiBrain import RotiBrain
+from returns.result import Result, Success, Failure
+from returns.maybe import Maybe, Some, Nothing
+
+
+# Thin wrapper around Exception for Result matching.
+class TalkbackError(Exception):
+    def __init__(self, reason : typing.Optional[str]):
+        super().__init__(reason)
+        self.reason = reason
 
 #Adds new talkbacks, also automerges talkbacks if a duplicate trigger is given.
-def _add_talkback_phrase(serverID, trigger_phrases, response_phrases):
+def _add_talkback_phrase(serverID, trigger_phrases, response_phrases, logger : typing.Optional[logging.Logger]):
         try:
             res = ""
             t_data = db[serverID]["trigger_phrases"] #loads the current trigger data
@@ -63,10 +72,8 @@ def _add_talkback_phrase(serverID, trigger_phrases, response_phrases):
 
             return "Successfully created new talkback." if not res else (res + "Successfully added new talkback.")
         except Exception as e:
-            exc_type, exc_obj, exc_tb = sys.exc_info()
-            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-            print(exc_type, fname, exc_tb.tb_lineno)
-            print(e)
+            if logger:
+                logger.warning("Failed to create new talkback action with given traceback:\n%s", e)
             return "Failed to create new talkback action"
 
 #This function is quite complex, in essence this function finds the triggers that most similarly match the given keyword and returns them, while also formatting the embed that stores them all.
@@ -146,67 +153,59 @@ def _generate_embed_and_triggers(guild, msg = "", list_enabled = False):
 
     return [all_embeds, matched_triggers] if not list_enabled else all_embeds
 
-#This is the strict match algorithm, only will return true if there is at least 1 exact match for a trigger in a message.
-#Ex: trigger = "HERE" and msg = "THERE", strict match would return False whereas the normal matching algorithm would return True, since "here" is a substring of "there".
-def _strict_match(trigger, msg):
-    return len(re.findall('\\b' + trigger + '\\b', msg.casefold(), flags=re.IGNORECASE)) > 0
-
-
 class Talkback(commands.GroupCog, group_name="talkback"):
     def __init__(self, bot : commands.Bot):
         super().__init__()
         self.bot = bot
+        self.logger = logging.getLogger(__name__)
         self.brain = RotiBrain()
         self.cooldown = 5 # 5 second cooldown for AI responses to not be rate limited.
         self.last_response = 0
     
-    async def _say_talkback(self, message : discord.Message) -> bool:
+    # This function is used to match words inside of a message to check if a talkback trigger is present.
+    def _match_talkback(self, trigger : str, msg : str, strict : bool) -> str:
+        if strict:
+            #This is the strict match algorithm, only will return true if there is at least 1 exact match for a trigger in a message.
+            #Ex: trigger = "HERE" and msg = "THERE", strict match would return False whereas the normal matching algorithm would return True, since "here" is a substring of "there".
+            return len(re.findall('\\b' + trigger + '\\b', msg.casefold(), flags=re.IGNORECASE)) > 0
+        return trigger in msg
+    
+    def _generate_talkback(self, message : discord.Message) -> Maybe[str]:
         if self.bot.user in message.mentions:
-            return False # If the message mentions the bot directly, all talkbacks are bypassed and it goes straight to the AI.
+            return Nothing # If the message mentions the bot directly, all talkbacks are bypassed and it goes straight to the AI.
         
-        msg = message.content
+        msg = message.content.casefold()
         serverID = message.guild.id
-        delete_duration = db[serverID]["settings"]["talkback"]["duration"]
+        
+        if serverID not in db:
+            return Nothing
+
         strict = db[serverID]["settings"]["talkback"]["strict"]
         probability = db[serverID]["settings"]["talkback"]["res_probability"] / 100
+        responses = db[serverID]["response_phrases"]
+        rand = random.random()
 
-        if serverID in db.keys():
-            for i in range(len(db[serverID]["trigger_phrases"])):
-                for j in range(len(db[serverID]["trigger_phrases"][i])):
-                    rand = random.random()
-                    view = TalkbackResView(serverID, message.author)
-                    if strict and _strict_match(db[serverID]["trigger_phrases"][i][j].casefold().strip(), msg.casefold()) and probability >= rand:
-                        if delete_duration > 0:
-                            #If duration > 0, it will delete after x seconds
-                            await message.channel.send(random.choice(db[serverID]["response_phrases"][i]), delete_after=delete_duration, view=view)
-                        else:
-                            #If duration = 0 (negatives are banned), it is permanent.
-                            await message.channel.send(random.choice(db[serverID]["response_phrases"][i]), view=view)
-                        return True
+        if probability < rand:
+            return Nothing
 
-                    elif not strict and db[serverID]["trigger_phrases"][i][j].casefold().strip() in msg.casefold() and probability >= rand:
-                        if delete_duration > 0:
-                            #If duration > 0, it will delete after x seconds
-                            await message.channel.send(random.choice(db[serverID]["response_phrases"][i]), delete_after=delete_duration, view=view)
-                        else:
-                            #If duration = 0 (negatives are banned), it is permanent.
-                            await message.channel.send(random.choice(db[serverID]["response_phrases"][i]), view=view)
-                        return True
-        return False # No talkback was found or none was triggered.
+        # Index here is used for responses since they're parallel arrays to each other.
+        for i, triggers in enumerate(db[serverID]["trigger_phrases"]):
+            for trigger in triggers:
+                if self._match_talkback(trigger.casefold(), msg, strict):
+                    return Some(random.choice(responses[i]))
+        return Nothing # No talkback was found
 
-    async def _say_ai_talkback(self, message : discord.Message) -> bool:
-        serverID = message.guild.id
-        delete_duration = db[serverID]["settings"]["talkback"]["duration"]
+    async def _generate_ai_talkback(self, message : discord.Message) -> Result[str, TalkbackError]:
+        serverID = message.guild.id 
         probability = db[serverID]["settings"]["talkback"]["ai_probability"] / 100
-        view = TalkbackResView(serverID, message.author)
         channel : discord.TextChannel = message.channel
 
         if time.time() - self.last_response < self.cooldown:
-            return False # This is to not overload the discord API.
+            return Failure(TalkbackError("Woah too fast! Try again in a moment!"))
 
         # If the bot isn't mentioned and the probability isn't reached, no response.
         if probability <= 0 or (self.bot.user not in message.mentions and random.random() >= probability):
-            return False # No response!
+            return Failure(TalkbackError)
 
         self.last_response = time.time()
         chat_history = "No chat history"
@@ -233,31 +232,45 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         )
 
         if not response:
-            return False # Fail gracefully
+            return Failure(TalkbackError()) # If any error occurs with the response.
 
-        if delete_duration:
-            await message.channel.send(response, view=view, delete_after=delete_duration)
-        else:
-            await message.channel.send(response, view=view)
-        return True
+        return Success(response)
 
     @commands.Cog.listener()
     async def on_message(self, message : discord.Message):
         if not message or message.author == self.bot.user or not db[message.guild.id]["settings"]["talkback"]["enabled"]:
             return
         
-        talkback_activated : bool = await self._say_talkback(message)
+        serverID = message.guild.id
+        delete_duration = db[serverID]["settings"]["talkback"]["duration"]
+        view = TalkbackResView(serverID, message.author)
 
-        if talkback_activated:
-            return # Talkback happened, nothing more to do.
-
+        match self._generate_talkback(message):
+            case Some(response) if delete_duration:
+                await message.channel.send(response, view=view, delete_after=delete_duration)
+                return
+            case Some(response):
+                await message.channel.send(response, view=view)
+                return
+            case Maybe.empty:
+                pass # No talkback was fired.
+        
         # Try an AI message, the probability of this happening is related to the talkback probability as well.
-        await self._say_ai_talkback(message)
+        async with message.channel.typing():
+            match await self._generate_ai_talkback(message):
+                case Success(response) if delete_duration:
+                    await message.channel.send(response, view=view, delete_after=delete_duration)
+                case Success(response):
+                    await message.channel.send(response, view=view)
+                case Failure(TalkbackError() as error) if error.reason:
+                    await message.channel.send(error, view=view, delete_after=5)
+                case Failure(_):
+                    pass
 
     @app_commands.command(name="add", description="Add a new talkback pair. Spaces separate elements, use quotes to group phrases.")
     async def _talkback_add(self, interaction : discord.Interaction, triggers : str, responses : str):
         await interaction.response.defer()
-        notif = _add_talkback_phrase(interaction.guild_id, str(triggers), str(responses))
+        notif = _add_talkback_phrase(interaction.guild_id, str(triggers), str(responses), self.logger)
         await interaction.followup.send(notif)
 
     @app_commands.command(name="remove", description="Remove a current talkback trigger/response pair")
@@ -384,7 +397,7 @@ class Navigation(discord.ui.View):
         self.stop()
 
 class TalkbackResView(discord.ui.View):
-    def __init__(self, guild_id, triggeree):
+    def __init__(self, guild_id : int , triggeree : str):
         super().__init__()
         self.guild_id = guild_id
         self.triggeree = triggeree # Who triggered the talkback
@@ -392,7 +405,11 @@ class TalkbackResView(discord.ui.View):
     @discord.ui.button(label='Delete', style=discord.ButtonStyle.red)
     async def _delete(self, interaction : discord.Interaction, button : discord.ui.Button):
         # If the user has the ability to delete messages or triggered the talkback themselves.
-        if interaction.user.id == self.triggeree or interaction.permissions.manage_messages:
+        original_message : discord.Message = interaction.message
+        channel = original_message.channel
+        member = interaction.guild.get_member(interaction.user.id)
+
+        if interaction.user.id == self.triggeree or channel.permissions_for(member).manage_messages:
             try:
                 await interaction.message.delete()
             except discord.Forbidden:
@@ -405,6 +422,48 @@ class TalkbackResView(discord.ui.View):
                 "You do not have permission to delete this message.",
                 ephemeral=True
             )
+    
+    @discord.ui.button(label='Keep', style=discord.ButtonStyle.green)
+    async def _keep(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """
+        Clones the message without UI elements, cancels any delete_after timer, and keeps reactions.
+        I need to do a clone here because discord doesn't let me prematurely stop any "delete_after" timer that may be ticking.
+        """
+
+        original_message : discord.Message = interaction.message
+        channel = original_message.channel
+        member = interaction.guild.get_member(interaction.user.id)
+
+        # Verify permisisons
+        if not (channel.permissions_for(member).manage_messages or interaction.user.id == self.triggeree):
+            # If not, respond with a message indicating they lack permission
+            await interaction.response.send_message(
+                "You do not have permission to manage messages in this channel.",
+                ephemeral=True
+            )
+            return  # Stop further execution
+        
+        # Copy message content, embeds, and attachments
+        files = [await attachment.to_file() for attachment in original_message.attachments]
+
+        # Talkbacks can't have embeds, so they're omitted.
+        new_message = await channel.send(
+            content=original_message.content,
+            files=files  # Preserve attachments
+        )
+
+        # Re-add reactions
+        for reaction in original_message.reactions:
+            try:
+                await new_message.add_reaction(reaction.emoji)
+            except discord.Forbidden:
+                pass  # Bot lacks permission to add reactions
+
+        # Delete the original message (which maybe had delete_after)
+        try:
+            await original_message.delete()
+        except discord.NotFound:
+            pass  # If it was already deleted
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Talkback(bot))

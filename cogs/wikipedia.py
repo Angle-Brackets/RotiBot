@@ -2,7 +2,6 @@
 import discord
 import requests
 import json
-import typing
 
 import wikipediaapi as wiki
 
