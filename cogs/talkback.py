@@ -238,13 +238,13 @@ class Talkback(commands.GroupCog, group_name="talkback"):
 
     @commands.Cog.listener()
     async def on_message(self, message : discord.Message):
+        if not message or message.author == self.bot.user or not db[message.guild.id]["settings"]["talkback"]["enabled"]:
+            return
+        
         serverID = message.guild.id
         delete_duration = db[serverID]["settings"]["talkback"]["duration"]
         view = TalkbackResView(serverID, message.author)
 
-        if not message or message.author == self.bot.user or not db[message.guild.id]["settings"]["talkback"]["enabled"]:
-            return
-        
         match self._generate_talkback(message):
             case Some(response) if delete_duration:
                 await message.channel.send(response, view=view, delete_after=delete_duration)
@@ -397,7 +397,7 @@ class Navigation(discord.ui.View):
         self.stop()
 
 class TalkbackResView(discord.ui.View):
-    def __init__(self, guild_id, triggeree):
+    def __init__(self, guild_id : int , triggeree : str):
         super().__init__()
         self.guild_id = guild_id
         self.triggeree = triggeree # Who triggered the talkback
@@ -405,7 +405,11 @@ class TalkbackResView(discord.ui.View):
     @discord.ui.button(label='Delete', style=discord.ButtonStyle.red)
     async def _delete(self, interaction : discord.Interaction, button : discord.ui.Button):
         # If the user has the ability to delete messages or triggered the talkback themselves.
-        if interaction.user.id == self.triggeree or interaction.permissions.manage_messages:
+        original_message : discord.Message = interaction.message
+        channel = original_message.channel
+        member = interaction.guild.get_member(interaction.user.id)
+
+        if interaction.user.id == self.triggeree or channel.permissions_for(member).manage_messages:
             try:
                 await interaction.message.delete()
             except discord.Forbidden:
@@ -418,6 +422,48 @@ class TalkbackResView(discord.ui.View):
                 "You do not have permission to delete this message.",
                 ephemeral=True
             )
+    
+    @discord.ui.button(label='Keep', style=discord.ButtonStyle.green)
+    async def _keep(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """
+        Clones the message without UI elements, cancels any delete_after timer, and keeps reactions.
+        I need to do a clone here because discord doesn't let me prematurely stop any "delete_after" timer that may be ticking.
+        """
+
+        original_message : discord.Message = interaction.message
+        channel = original_message.channel
+        member = interaction.guild.get_member(interaction.user.id)
+
+        # Verify permisisons
+        if not (channel.permissions_for(member).manage_messages or interaction.user.id == self.triggeree):
+            # If not, respond with a message indicating they lack permission
+            await interaction.response.send_message(
+                "You do not have permission to manage messages in this channel.",
+                ephemeral=True
+            )
+            return  # Stop further execution
+        
+        # Copy message content, embeds, and attachments
+        files = [await attachment.to_file() for attachment in original_message.attachments]
+
+        # Talkbacks can't have embeds, so they're omitted.
+        new_message = await channel.send(
+            content=original_message.content,
+            files=files  # Preserve attachments
+        )
+
+        # Re-add reactions
+        for reaction in original_message.reactions:
+            try:
+                await new_message.add_reaction(reaction.emoji)
+            except discord.Forbidden:
+                pass  # Bot lacks permission to add reactions
+
+        # Delete the original message (which maybe had delete_after)
+        try:
+            await original_message.delete()
+        except discord.NotFound:
+            pass  # If it was already deleted
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Talkback(bot))

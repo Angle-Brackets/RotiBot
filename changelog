@@ -1,8 +1,9 @@
 {
-  "version": "Alpha V1.9.4.1",
-  "summary": "AI Settings",
+  "version": "Alpha V1.9.5",
+  "summary": "Talkback Optimizations & AI Stability Fixes",
   "changes": {
-    "Internal Updates": "-Reorganized all AI features into a new class for cross-command support.\n-Debug commands moved to be prefix commands to hide them from general use.",
-    "Features": "-Roti can now generate text responses from prompts, use /generate text!\n-/settings talkback probability also affects the chance of random AI responses, set to 0 to completely disable them.\n-Roti has AI-powered talkbacks now, randomly or when pinged/replied to, Roti will respond with some response related to the conversation to be a *little* more annoying. ;)\n-You can adjust how frequently you'd like Roti to respond to you using the /settings talkback ai_probability command now."
+    "Internal Updates": "-Optimized talkback generation for both standard and AI talkbacks to be far more reliable.\n-Optimized code execution with /execute.",
+    "Features": "-Standard and AI talkbacks are way more reliable now.\n-Added a talking indicator to Roti whenever he is about to respond with an AI message.\n-Added a \"Keep\" Button to Roti to now Keep talkbacks to prevent auto-deletion of talkbacks.",
+    "Bugs": "-Patched bug with /settings talkback ai_probability 0 being ignored.\n-Patched bug with JSON response showing with AI talkback.\n-Patched bug with AI responses randomly dropping or failing."
   }
 }

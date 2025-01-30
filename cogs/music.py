@@ -97,8 +97,8 @@ class Music(commands.Cog):
         except Exception as e:
             self._update_queue_embed_time.stop()
 
-    @commands.Cog.listener()
     #Handles disconnecting
+    @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         if before.channel is not None and after.channel is None:
             if len(before.channel.members) >= 1:
@@ -148,9 +148,9 @@ class Music(commands.Cog):
 
                 vc.queue_embed = _generate_queue_embed(vc, vc.queue_interaction)
                 await vc.queue_interaction.edit_original_response(embed=vc.queue_embed)
-
+    
+    # This is not used in _play() as the wavelink context would not be transferred when joining.    
     @app_commands.command(name="join", description="Makes the bot join a valid voice channel")
-    # This is not used in _play() as the wavelink context would not be transferred when joining.
     async def _join(self, interaction : discord.Interaction):
         await interaction.response.defer()
         if interaction.user.voice is None:
