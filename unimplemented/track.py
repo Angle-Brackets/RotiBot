@@ -4,7 +4,7 @@ import time
 from discord.ext import commands
 from discord import app_commands
 from datetime import datetime
-from data import db
+from database.data import db
 
 #THIS IS NOT AN IMPLEMENTED COMMAND DUE TO ISSUES REGARDING FEASIBILITY WITH USER STATUSES BEING EXTREMELY INACCURATE.
 

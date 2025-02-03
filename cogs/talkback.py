@@ -4,19 +4,18 @@ import typing
 import discord
 import re
 import shlex
-import data
 import random
 import time
 import asyncio
 import logging
 
-from data import db
+from database.data import RotiDatabase
 from discord.ext import commands
 from discord import app_commands
 from utils.RotiBrain import RotiBrain
 from returns.result import Result, Success, Failure
 from returns.maybe import Maybe, Some, Nothing
-
+from typing import Optional
 
 # Thin wrapper around Exception for Result matching.
 class TalkbackError(Exception):
@@ -25,11 +24,11 @@ class TalkbackError(Exception):
         self.reason = reason
 
 #Adds new talkbacks, also automerges talkbacks if a duplicate trigger is given.
-def _add_talkback_phrase(serverID, trigger_phrases, response_phrases, logger : typing.Optional[logging.Logger]):
+def _add_talkback_phrase(serverID : int, db : RotiDatabase, trigger_phrases : str, response_phrases : str, logger : Optional[logging.Logger]):
         try:
             res = ""
-            t_data = db[serverID]["trigger_phrases"] #loads the current trigger data
-            r_data = db[serverID]["response_phrases"] #loads the current response data
+            t_data = db[serverID, "trigger_phrases"].unwrap() #loads the current trigger data
+            r_data = db[serverID, "trigger_phrases"].unwrap() #loads the current response data
             trigger_list = shlex.split(trigger_phrases) #separates entries by spaces, quotes are used to group items
             response_list = shlex.split(response_phrases) #see above
 
@@ -59,16 +58,16 @@ def _add_talkback_phrase(serverID, trigger_phrases, response_phrases, logger : t
                         else:
                             res += "Successfully merged trigger {0} with pre-existing talkback combo.\n".format(trigger_list[j])
                             trigger_list_copy.remove(trigger_list[j])
-                            db[serverID]["response_phrases"][i] += response_list
+                            db[serverID, "response_phrases"].unwrap()[i] += response_list
 
             trigger_list = trigger_list_copy
 
-            db[serverID]["trigger_phrases"].append(trigger_list)
-            db[serverID]["response_phrases"].append(response_list)
+            db[serverID, "trigger_phrases"].unwrap().append(trigger_list)
+            db[serverID, "response_phrases"].unwrap().append(response_list)
 
             #Updates mongo database
-            data.push_data(serverID, "trigger_phrases")
-            data.push_data(serverID, "response_phrases")
+            db.write_data(serverID, "trigger_phrases")
+            db.write_data(serverID, "response_phrases")
 
             return "Successfully created new talkback." if not res else (res + "Successfully added new talkback.")
         except Exception as e:
@@ -82,10 +81,9 @@ def _add_talkback_phrase(serverID, trigger_phrases, response_phrases, logger : t
 #serverID is the serverID
 #msg is the keyword given to the function to be used in the matching search.
 #list_enabled is for /talkback list, and prevents the matched triggers from being generated or returned to increase speed.
-def _generate_embed_and_triggers(guild, msg = "", list_enabled = False):
-    data = db[guild.id]
+def _generate_embed_and_triggers(guild : discord.Guild, db : RotiDatabase, msg = "", list_enabled = False):
     msg = msg.strip()
-
+    trigger_phrases = db[guild.id, "trigger_phrases"].unwrap()
     all_embeds = list() #If somehow it exceeds the 6000 character limit, this stores all the embeds that the list gets split at for multiple pages. Also handles if there are greater than 25 fields in an embed...which is more common.
 
     matched_triggers = list()
@@ -105,7 +103,7 @@ def _generate_embed_and_triggers(guild, msg = "", list_enabled = False):
     def _update_embed(embed, trigger_number, index):
         #This must be capped at 256 characters for field name (triggers) and 1024 for field values (responses) to avoid a crash
         potential_trigger = "[{0}] ".format(trigger_number)
-        trigger_display = ", ".join(data["trigger_phrases"][index])
+        trigger_display = ", ".join(trigger_phrases[index])
 
         #This will truncate triggers to 256 chars total.
         if len(potential_trigger) + len(trigger_display) > 256:
@@ -113,7 +111,7 @@ def _generate_embed_and_triggers(guild, msg = "", list_enabled = False):
         potential_trigger = potential_trigger + trigger_display
 
         #Similar idea for responses, must cap at 1024
-        potential_res = ", ".join(data["response_phrases"][index])
+        potential_res = ", ".join(trigger_phrases[index])
 
         if len(potential_res) > 1024:
             potential_res = potential_res[:1021] + "..."
@@ -122,14 +120,14 @@ def _generate_embed_and_triggers(guild, msg = "", list_enabled = False):
         trigger_number += 1
 
         if not list_enabled:
-            matched_triggers.append(data["trigger_phrases"][index])
+            matched_triggers.append(trigger_phrases[index])
 
     #Will add support for searching response phrases later.
     #Not the max of 6000 just so I can add page numbers safely.
-    for i in range(len(data["trigger_phrases"])):
-        for j in range(len(data["trigger_phrases"][i])):
-            if msg.casefold() in data["trigger_phrases"][i][j].casefold().strip():
-                if (len(embed.fields) % 25 != 0 if len(embed.fields) > 0 else True) and len(embed) + len(''.join(data["trigger_phrases"][i])) < 5000:
+    for i in range(len(trigger_phrases)):
+        for j in range(len(trigger_phrases[i])):
+            if msg.casefold() in trigger_phrases[i][j].casefold().strip():
+                if (len(embed.fields) % 25 != 0 if len(embed.fields) > 0 else True) and len(embed) + len(''.join(trigger_phrases[i])) < 5000:
                     _update_embed(embed, trigger_number, i)
                     trigger_number += 1
                 else:
@@ -161,6 +159,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         self.brain = RotiBrain()
         self.cooldown = 5 # 5 second cooldown for AI responses to not be rate limited.
         self.last_response = 0
+        self.db = RotiDatabase()
     
     # This function is used to match words inside of a message to check if a talkback trigger is present.
     def _match_talkback(self, trigger : str, msg : str, strict : bool) -> str:
@@ -177,19 +176,20 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         msg = message.content.casefold()
         serverID = message.guild.id
         
-        if serverID not in db:
+        if serverID not in self.db:
             return Nothing
 
-        strict = db[serverID]["settings"]["talkback"]["strict"]
-        probability = db[serverID]["settings"]["talkback"]["res_probability"] / 100
-        responses = db[serverID]["response_phrases"]
+        strict = self.db[serverID, "settings", "talkback", "strict"].unwrap()
+        probability = self.db[serverID, "settings", "talkback", "res_probability"].unwrap() / 100
+        trigger_phrases = self.db[serverID, "trigger_phrases"].unwrap()
+        responses = self.db[serverID, "response_phrases"].unwrap()
         rand = random.random()
 
         if probability < rand:
             return Nothing
 
         # Index here is used for responses since they're parallel arrays to each other.
-        for i, triggers in enumerate(db[serverID]["trigger_phrases"]):
+        for i, triggers in enumerate(trigger_phrases):
             for trigger in triggers:
                 if self._match_talkback(trigger.casefold(), msg, strict):
                     return Some(random.choice(responses[i]))
@@ -197,7 +197,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
 
     async def _generate_ai_talkback(self, message : discord.Message) -> Result[str, TalkbackError]:
         serverID = message.guild.id 
-        probability = db[serverID]["settings"]["talkback"]["ai_probability"] / 100
+        probability = self.db[serverID, "settings", "talkback", "ai_probability"].unwrap() / 100
         channel : discord.TextChannel = message.channel
 
         if time.time() - self.last_response < self.cooldown:
@@ -238,11 +238,11 @@ class Talkback(commands.GroupCog, group_name="talkback"):
 
     @commands.Cog.listener()
     async def on_message(self, message : discord.Message):
-        if not message or message.author == self.bot.user or not db[message.guild.id]["settings"]["talkback"]["enabled"]:
+        if not message or message.author == self.bot.user or not self.db[message.guild.id, "settings", "talkback", "enabled"].unwrap():
             return
         
         serverID = message.guild.id
-        delete_duration = db[serverID]["settings"]["talkback"]["duration"]
+        delete_duration = self.db[serverID, "settings", "talkback", "duration"].unwrap()
         view = TalkbackResView(serverID, message.author)
 
         match self._generate_talkback(message):
@@ -256,30 +256,31 @@ class Talkback(commands.GroupCog, group_name="talkback"):
                 pass # No talkback was fired.
         
         # Try an AI message, the probability of this happening is related to the talkback probability as well.
-        async with message.channel.typing():
-            match await self._generate_ai_talkback(message):
-                case Success(response) if delete_duration:
-                    await message.channel.send(response, view=view, delete_after=delete_duration)
-                case Success(response):
-                    await message.channel.send(response, view=view)
-                case Failure(TalkbackError() as error) if error.reason:
-                    await message.channel.send(error, view=view, delete_after=5)
-                case Failure(_):
-                    pass
+        match await self._generate_ai_talkback(message):
+            case Success(response) if delete_duration:
+                await message.channel.typing()
+                await message.channel.send(response, view=view, delete_after=delete_duration)
+            case Success(response):
+                await message.channel.typing()
+                await message.channel.send(response, view=view)
+            case Failure(TalkbackError() as error) if error.reason:
+                await message.channel.send(error, view=view, delete_after=5)
+            case Failure(_):
+                pass
 
     @app_commands.command(name="add", description="Add a new talkback pair. Spaces separate elements, use quotes to group phrases.")
     async def _talkback_add(self, interaction : discord.Interaction, triggers : str, responses : str):
         await interaction.response.defer()
-        notif = _add_talkback_phrase(interaction.guild_id, str(triggers), str(responses), self.logger)
+        notif = _add_talkback_phrase(interaction.guild_id, self.db, str(triggers), str(responses), self.logger)
         await interaction.followup.send(notif)
 
     @app_commands.command(name="remove", description="Remove a current talkback trigger/response pair")
     async def _talkback_remove(self, interaction : discord.Interaction, trigger : typing.Optional[str]):
         await interaction.response.defer()
 
-        res = _generate_embed_and_triggers(interaction.guild, str(trigger) if trigger is not None else "")
+        res = _generate_embed_and_triggers(interaction.guild, self.db, str(trigger) if trigger is not None else "")
         page, pages = 1, len(res[0])
-        view = Navigation(pages, res, True)
+        view = Navigation(pages, res, True, self.db)
 
         view.message = await interaction.followup.send(embed=res[0][page-1], view=view)
         view.message = await interaction.original_response()
@@ -289,14 +290,14 @@ class Talkback(commands.GroupCog, group_name="talkback"):
     @app_commands.command(name="list", description="Lists all talkback pairs present in server.")
     async def _talkback_list(self, interaction : discord.Interaction, keyword : typing.Optional[str]):
         await interaction.response.defer()
-        if len(db[interaction.guild_id]["trigger_phrases"]) == 0:
+        if not self.db[interaction.guild_id, "trigger_phrases"].unwrap():
             await interaction.response.send_message("No talkbacks are currently present on this server.")
             return
 
-        embeds = _generate_embed_and_triggers(interaction.guild, str(keyword) if keyword is not None else "", list_enabled=True)
+        embeds = _generate_embed_and_triggers(interaction.guild, self.db, str(keyword) if keyword is not None else "", list_enabled=True)
 
         page, pages = 1, len(embeds) #Subtract 1 for index
-        view = Navigation(pages, embeds, False) #Only if pages > 1 will the navigation buttons appear.
+        view = Navigation(pages, embeds, False, self.db) #Only if pages > 1 will the navigation buttons appear.
 
         view.message = await interaction.followup.send(embed=embeds[page-1], view=view)
         view.message = await interaction.original_response() #If I needed it in the button class
@@ -318,7 +319,7 @@ def generate_options(current_page, embed_list, fields):
     return temp
 
 class Navigation(discord.ui.View):
-    def __init__(self, pages : int, embed_list : list, trigger_list : False):
+    def __init__(self, pages : int, embed_list : list, trigger_list : False, db : RotiDatabase):
         super().__init__()
         self.value = None
         self.timeout = 60
@@ -326,6 +327,7 @@ class Navigation(discord.ui.View):
         self.pages = pages
         self.current_page = 1 #Subtract 1 for indexing.
         self.remove_item(self._talkback_rm_input)
+        self.db = db
 
         if not trigger_list:
             self.remove_mode = False
@@ -382,15 +384,20 @@ class Navigation(discord.ui.View):
     @discord.ui.select(min_values=1, options=[], placeholder="Select a Talkback")
     async def _talkback_rm_input(self, interaction : discord.Interaction, selection : discord.ui.Select):
         index = int(selection.values[0][selection.values[0].index("#") + 1:]) #Gets the corresponding index to remove.
-        index = db[interaction.guild_id]["trigger_phrases"].index(self.embed_list[1][index-1])
+        index = self.db[interaction.guild_id, "trigger_phrases"].unwrap().index(self.embed_list[1][index-1])
+        triggers = self.db[interaction.guild_id, "trigger_phrases"].unwrap()
+        responses = self.db[interaction.guild_id, "response_phrases"].unwrap()
 
-        t, r = db[interaction.guild_id]["trigger_phrases"][index], db[interaction.guild_id]["response_phrases"][index]
+        t = triggers[index]
+        r = responses[index]
 
         #Deletes the data
-        del db[interaction.guild_id]["trigger_phrases"][index]
-        del db[interaction.guild_id]["response_phrases"][index]
-        data.push_data(interaction.guild_id, "trigger_phrases")
-        data.push_data(interaction.guild_id, "response_phrases")
+        del triggers[index]
+        del responses[index]
+        self.db[interaction.guild_id, "trigger_phrases"] = triggers
+        self.db[interaction.guild_id, "response_phrases"] = responses
+        self.db.write_data(interaction.guild_id, "trigger_phrases")
+        self.db.write_data(interaction.guild_id, "response_phrases")
 
         await interaction.response.send_message(content="Successfully deleted trigger/response pair: " + str(t)[1:-1] + "/" + str(r)[1:-1])
         await self.message.delete()

@@ -1,8 +1,5 @@
 import discord
-import pathlib
-import os
 
-from .motd import choose_motd
 from discord.ext import commands
 from discord import app_commands
 from discord.app_commands import checks
@@ -18,7 +15,16 @@ class Debug(commands.Cog):
     @commands.is_owner()
     @commands.command(name="shuffle_status", help="DEBUG: Changes the bot's status")
     async def _shuffle_status(self, ctx: commands.Context):
-        await self.bot.change_presence(activity=discord.Activity(name=choose_motd(self.bot.activity.name if self.bot.activity is not None else None), type=1))
+        motd_cog = self.bot.get_cog("Motd")
+
+        if not motd_cog:
+            await ctx.send("MOTD Cog couldn't be found!", ephemeral=True)
+            return
+
+        new_motd = motd_cog.choose_motd(self.bot.activity.name if self.bot.activity else None)
+
+        await ctx.message.delete()
+        await self.bot.change_presence(activity=discord.Activity(name=new_motd, type=discord.ActivityType.playing))
         await ctx.send("Shuffled!", ephemeral=True)
 
     @commands.is_owner()

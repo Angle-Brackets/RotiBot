@@ -2,9 +2,9 @@ import discord
 import json
 import typing
 
+from database.data import calculate_uptime
 from discord.ext import commands
 from discord import app_commands
-from data import calculate_uptime
 from enum import Enum
 
 """
@@ -56,7 +56,7 @@ def _generate_help_embed(command = None):
         return all_embeds
 
     # If a page is selected that is valid, it will display all the help information for that page.
-    if command is not None:
+    if command:
         return _generate_pages(help_information[command])
     else:
         return _generate_pages()

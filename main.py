@@ -11,7 +11,8 @@ import logging
 from dotenv import load_dotenv
 from discord.ext import commands
 from discord.utils import find
-from data import update_database, delete_guild_entry
+from database.data import RotiDatabase
+from returns.maybe import Some, Nothing, Maybe
 
 #load credentials
 load_dotenv(".env")
@@ -27,6 +28,7 @@ class Roti(commands.Bot):
         self.args = self.parser.parse_args()
 
         self.test_build = bool(self.args.test)
+        self.db = RotiDatabase(os.getenv("DATABASE"))
 
         super().__init__(
             command_prefix = "$",
@@ -35,6 +37,7 @@ class Roti(commands.Bot):
         )
 
     async def on_ready(self):
+        await self.wait_until_ready()
         self.logger.info("Roti Bot Online, logged in as %s", self.user)
 
     async def setup_hook(self):
@@ -49,7 +52,7 @@ class Roti(commands.Bot):
             await wavelink.Pool.connect(nodes=nodes, client=self, cache_capacity=100)
         else:
             self.logger.warning("Music Functionality is Disabled!")
-
+        
         await roti.tree.sync()
 
     async def close(self):
@@ -63,7 +66,7 @@ class Roti(commands.Bot):
             await general.send(
                 'Hello {0}, I\'m Roti! Thank you for adding me to this guild. You can check my commands by doing /help. Wait a moment while I prepare my database for this server...'.format(
                     guild.name))
-            res = update_database(guild)
+            res = self.db.update_database(guild)
             await general.send(res)
         else:
             # if there is none, finds first text channel it can speak in.
@@ -72,13 +75,16 @@ class Roti(commands.Bot):
                     await channel.send(
                         'Hello {0}, I\'m Roti! Thank you for adding me to this guild. You can check my commands by doing /help. Wait a moment while I prepare my database for this server...'.format(
                             guild.name))
-                    res = update_database(guild)
+                    res = self.db.update_database(guild)
                     await channel.send(res)
                     break
 
     async def on_guild_remove(self, guild : discord.Guild):
-        delete_guild_entry(guild.id)
-        self.logger.critical("Deleted guild %s's data.", guild.name)
+        match self.db.delete_guild_entry(guild.id):
+            case Some(error):
+                self.logger.critical("Failed to delete %s's data. ID: %i. Error: %s", guild.name, guild.id, error)
+            case Maybe.empty:
+                self.logger.critical("Deleted guild %s's data.", guild.name)
 
 roti = Roti()
 roti.run(os.getenv('TOKEN') if not roti.test_build else os.getenv('TEST_TOKEN'))
