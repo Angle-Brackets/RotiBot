@@ -4,13 +4,12 @@ import discord
 
 from utils.Singleton import Singleton
 from pymongo import MongoClient
-from dotenv import load_dotenv
 from enum import Enum
 from copy import deepcopy
-from typing import Dict, Any, Optional, Tuple, Unpack
+from typing import Dict, Any, Optional, Tuple, Unpack, TypedDict
 from returns.result import Result, Success, Failure
 from returns.maybe import Maybe, Some, Nothing
-load_dotenv(".env")
+import logging
 
 """
 This is the structure of the data that is stored in both MongoDB and 
@@ -54,13 +53,16 @@ The optional is required for the first instantiation of the Singleton.
 class RotiDatabase(metaclass=Singleton):
     def __init__(self, database_url : Optional[str]):
         self._database_url = database_url
+        self.logger = logging.getLogger(__name__)
         self._cluster : MongoClient = MongoClient(self._database_url)
         self._collections = self._cluster["Roti"]["data"]
         self._db : Dict[str, Any] = dict() # Used for quick access to the data, but changes need to be pushed!
 
         # Initialize database.
+        start = time.time()
+        self.logger.info("Initializing Database...")
         self._download_database()
-        print("Initialized")
+        self.logger.info(f"Database Initialized in {round(1000*(time.time() - start), 2)}ms")
 
     def __contains__(self, value):
         return value in self._db
@@ -112,7 +114,7 @@ class RotiDatabase(metaclass=Singleton):
             temp['server_id'] = serverID
             self._collections.insert_one(temp)
             self._db[serverID] = temp
-            return "Successfully created database entry for {0.name}. Have fun!".format(guild)
+            return f"Successfully created database entry for {guild.name}. Have fun!"
     
     def delete_guild_entry(self, server_id : int) -> Maybe[DatabaseError]:
         if not server_id in self._db:

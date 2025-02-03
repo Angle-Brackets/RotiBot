@@ -22,7 +22,7 @@ def build_quote(quote_obj : dict):
     if quote_obj["name"] == "None":
         return quote_obj["default"]
     else:
-        return quote_obj["default"] + "\n-{0}".format(quote_obj["name"])
+        return quote_obj["default"] + f"\n-{quote_obj["name"]}"
 
 class Quote(commands.GroupCog, group_name="quote"):
     def __init__(self, bot : commands.Bot):
@@ -44,7 +44,7 @@ class Quote(commands.GroupCog, group_name="quote"):
         quotes = self.db[interaction.guild_id, "quotes"].unwrap()
         for quote_obj in quotes:
             if quote_obj["tag"] == tag:
-                await interaction.followup.send("Failed to add new quote, duplicate tag detected with quote: {0}!".format(quote_obj["default"] if quote_obj["has_original"] else quote_obj["quote"]))
+                await interaction.followup.send(f"Failed to add new quote, duplicate tag detected with quote: {quote_obj["default"] if quote_obj["has_original"] else quote_obj["quote"]}!")
                 return
 
         new_quote = QUOTE_STRUCTURE.copy()
@@ -110,8 +110,8 @@ class Quote(commands.GroupCog, group_name="quote"):
                     elif show_defaultless:
                         quote_to_display = quote_obj["quote"] #Otherwise will just grab the quote with the replaceable portions if show_defaultless is true
 
-                    quote_sayer = "[{0}]. A Quote by {1}".format(count, quote_obj["name"] if quote_obj[ "name"] != "None" else "???")
-                    new_embed.add_field(name=(quote_sayer if len(quote_sayer) < 128 else quote_sayer[0:125] + "...") + "\nTag: {0} {1}".format(quote_obj["tag"] if len(quote_obj["tag"]) < 128 else quote_obj["tag"][0:125] + "...", "🔓" if quote_obj["replaceable"] else "🔒"),value=quote_to_display[0:147] + "..." if len(quote_to_display) > 150 else quote_to_display,inline=False)
+                    quote_sayer = f"[{count}]. A Quote by {quote_obj["name"] if quote_obj[ "name"] != "None" else "???"}"
+                    new_embed.add_field(name=(quote_sayer if len(quote_sayer) < 128 else quote_sayer[0:125] + "...") + f"\nTag: {quote_obj["tag"] if len(quote_obj["tag"]) < 128 else quote_obj["tag"][0:125] + "..."} {"🔓" if quote_obj["replaceable"] else "🔒"}",value=quote_to_display[0:147] + "..." if len(quote_to_display) > 150 else quote_to_display,inline=False)
                     new_embed.set_footer(text=f"Page {current_page}/{len(split_list)}\nSyntax: 🔒 - Nonreplaceable, 🔓 - Replaceable")
                     count += 1
             all_embeds.append(new_embed)
@@ -152,8 +152,8 @@ class Quote(commands.GroupCog, group_name="quote"):
             for quote_obj in arr:
                 quote_to_display = quote_obj["default"] if quote_obj["has_original"] else quote_obj["quote"]
                 # If show_defaultless is true, then this always runs basically.
-                quote_sayer = "[{0}]. A Quote by {1}".format(count, quote_obj["name"] if quote_obj["name"] != "None" else "???")
-                new_embed.add_field(name=(quote_sayer if len(quote_sayer) < 128 else quote_sayer[0:125] + "...") + "\nTag: {0}".format(quote_obj["tag"] if len(quote_obj["tag"]) < 128 else quote_obj["tag"][0:125] + "..."), value=quote_to_display[0:147] + "..." if len(quote_to_display) > 150 else quote_to_display, inline=False)
+                quote_sayer = f"[{count}]. A Quote by {quote_obj["name"] if quote_obj["name"] != "None" else "???"}"
+                new_embed.add_field(name=(quote_sayer if len(quote_sayer) < 128 else quote_sayer[0:125] + "...") + f"\nTag: {quote_obj["tag"] if len(quote_obj["tag"]) < 128 else quote_obj["tag"][0:125] + "..."}", value=quote_to_display[0:147] + "..." if len(quote_to_display) > 150 else quote_to_display, inline=False)
                 new_embed.set_footer(text=f"Page {current_page}/{len(split_list)}")
                 count += 1
             all_embeds.append(new_embed)
@@ -253,7 +253,7 @@ class Quote_Modal(discord.ui.Modal, title = "Make a new Replaceable Quote!"):
         
         for quote_obj in quotes:
             if quote_obj["tag"] == self.tag.value:
-                await interaction.response.send("Failed to add new quote, duplicate tag detected with quote: {0}!".format(quote_obj["default"] if quote_obj["has_original"] else quote_obj["quote"]))
+                await interaction.response.send(f"Failed to add new quote, duplicate tag detected with quote: {quote_obj["default"] if quote_obj["has_original"] else quote_obj["quote"]}!")
                 return
         else:
             new_quote = QUOTE_STRUCTURE.copy()
@@ -352,7 +352,7 @@ class Navigation(discord.ui.View):
             del quotes[index]
             self.db[interaction.guild_id, "quotes"] = quotes
             self.db.write_data(interaction.guild_id, "quotes")
-            await interaction.response.send_message(content="Successfully deleted the quote: {0}".format(quote_to_delete["default"] if quote_to_delete["has_original"] else quote_to_delete["quote"] + "\n-{0}".format(quote_to_delete["name"] if quote_to_delete["name"] != "None" else "???")))
+            await interaction.response.send_message(content=f"Successfully deleted the quote: {quote_to_delete["default"] if quote_to_delete["has_original"] else quote_to_delete["quote"]}\n-{quote_to_delete["name"] if quote_to_delete["name"] != "None" else "???"}")
             await self.message.delete()
         self.stop()
 

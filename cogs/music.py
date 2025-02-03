@@ -44,11 +44,16 @@ def _generate_queue_embed(vc : wavelink.Player, interaction : discord.Interactio
     if vc.playing:
         queue.put_at(0, vc.current)
     
-    embed = discord.Embed(title="<a:animated_music:996261334272454736> Music Queue <a:animated_music:996261334272454736>", description="Currently {0}: [{1}]({2}) [{3}/{4}]".format("playing" if not vc.looped else "looping", queue[0].title, queue[0].uri, time.strftime("%H:%M:%S", time.gmtime(vc.position)), time.strftime("%H:%M:%S", time.gmtime(queue[0].length))), color=0xecc98e)
+    embed = discord.Embed(
+        title="<a:animated_music:996261334272454736> Music Queue <a:animated_music:996261334272454736>",
+        description=f"Currently {"playing" if not vc.looped else "looping"}: [{queue[0].title}]({queue[0].uri}) [{time.strftime("%H:%M:%S", time.gmtime(vc.position))}/{time.strftime("%H:%M:%S", time.gmtime(queue[0].length))}]", 
+        color=0xecc98e
+    )
+    
     embed.set_footer(text="Special thanks to Wavelink & Pythonista for the library used for the music playback!")
 
     for i in range(len(queue)):
-        embed.add_field(name="{0}. {1} - [{2}]".format(i + 1, queue[i], time.strftime("%H:%M:%S", time.gmtime(queue[i].length // 1000))), value=f"Requested by: <@{vc.queue_appenders[i]}>", inline=False)
+        embed.add_field(name=f"{i+1}. {queue[i]} - [{time.strftime("%H:%M:%S", time.gmtime(queue[i].length // 1000))}]", value=f"Requested by: <@{vc.queue_appenders[i]}>", inline=False)
 
     #Gets the thumbnail to the current video playing
     embed.set_thumbnail(url=vc.current.artwork)
@@ -161,7 +166,7 @@ class Music(commands.Cog):
                 vc.skipped = False # Field to describe if current song was skipped - used to override loop
                 vc.queue_appenders = list() # Field to list the names of the people that requested a song
 
-                await interaction.followup.send("Successfully connected to `{0}`!".format(interaction.user.voice.channel))
+                await interaction.followup.send(f"Successfully connected to `{interaction.user.voice.channel}`!")
             else:
                 await interaction.guild.voice_client.move_to(interaction.user.voice.channel)
                 await interaction.followup.send(f"Successfully moved to `{interaction.user.voice.channel}`!")
@@ -311,8 +316,8 @@ class Music(commands.Cog):
     @app_commands.describe(volume="An integer between 0 and 500%, default volume is 100%")
     async def _volume(self, interaction : discord.Interaction, *, volume : typing.Optional[app_commands.Range[int,0,500]]):
         await interaction.response.defer()
-        if volume is None:
-            await interaction.followup.send("The current volume is: {0}%".format(self.db[interaction.guild_id, "settings", "music", "volume"].unwrap()),ephemeral=True)
+        if not volume:
+            await interaction.followup.send(f"The current volume is: {self.db[interaction.guild_id, "settings", "music", "volume"].unwrap()}%",ephemeral=True)
         else:
             self.db[interaction.guild_id, "settings", "music", "volume"] = volume
             self.db.write_data(interaction.guild_id, "settings")
@@ -331,7 +336,7 @@ class Music(commands.Cog):
         await interaction.response.defer()
         if speed is None:
             await interaction.followup.send(
-                "The current speed is: {0}%".format(self.db[interaction.guild_id, "settings", "music", "speed"].unwrap()),
+                f"The current speed is: {self.db[interaction.guild_id, "settings", "music", "speed"].unwrap()}%",
                 ephemeral=True)
         else:
             self.db[interaction.guild_id, "settings", "music", "speed"] = speed
@@ -351,7 +356,7 @@ class Music(commands.Cog):
         await interaction.response.defer()
         if pitch is None:
             await interaction.followup.send(
-                "The current pitch is: {0}%".format(self.db[interaction.guild_id, "settings", "music", "pitch"].unwrap()),ephemeral=True)
+                f"The current pitch is: {self.db[interaction.guild_id, "settings", "music", "pitch"].unwrap()}%", ephemeral=True)
         else:
             self.db[interaction.guild_id, "settings", "music", "pitch"] = pitch
             self.db.write_data(interaction.guild_id, "settings")
@@ -492,9 +497,9 @@ class MusicNav(discord.ui.View):
         self.db = db
         self.player = player
         self.guild_id = g_id
-        self._volume_label.label = "{0}%".format(self.db[self.guild_id, "settings", "music", "volume"].unwrap())
-        self._speed_label.label = "{0}%".format(self.db[self.guild_id, "settings", "music", "speed"].unwrap())
-        self._pitch_label.label = "{0}%".format(self.db[self.guild_id, "settings", "music", "pitch"].unwrap())
+        self._volume_label.label = f"{self.db[self.guild_id, "settings", "music", "volume"].unwrap()}%"
+        self._speed_label.label = f"{self.db[self.guild_id, "settings", "music", "speed"].unwrap()}%"
+        self._pitch_label.label = f"{self.db[self.guild_id, "settings", "music", "pitch"].unwrap()}%"
 
         self._volume_label.emoji = "🔇" if self.db[self.guild_id, "settings", "music", "volume"].unwrap() == 0 else discord.PartialEmoji(name="kirbin", id=996961280919355422, animated=True)
         self._speed_label.emoji = discord.PartialEmoji(name="sonic_waiting", id=996961282639024171, animated=True) if self.db[self.guild_id, "settings", "music", "speed"].unwrap() < 100 else discord.PartialEmoji(name="sonic_running", id=996961281837908008, animated=True)

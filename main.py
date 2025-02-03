@@ -64,8 +64,7 @@ class Roti(commands.Bot):
         general = find(lambda x: x.name == 'general', guild.text_channels)
         if general and general.permissions_for(guild.me).send_messages:
             await general.send(
-                'Hello {0}, I\'m Roti! Thank you for adding me to this guild. You can check my commands by doing /help. Wait a moment while I prepare my database for this server...'.format(
-                    guild.name))
+                f'Hello {guild.name}, I\'m Roti! Thank you for adding me to this guild. You can check my commands by doing /help. Wait a moment while I prepare my database for this server...')
             res = self.db.update_database(guild)
             await general.send(res)
         else:
@@ -73,8 +72,7 @@ class Roti(commands.Bot):
             for channel in guild.text_channels:
                 if channel.permissions_for(guild.me).send_messages:
                     await channel.send(
-                        'Hello {0}, I\'m Roti! Thank you for adding me to this guild. You can check my commands by doing /help. Wait a moment while I prepare my database for this server...'.format(
-                            guild.name))
+                        f'Hello {guild.name}, I\'m Roti! Thank you for adding me to this guild. You can check my commands by doing /help. Wait a moment while I prepare my database for this server...')
                     res = self.db.update_database(guild)
                     await channel.send(res)
                     break

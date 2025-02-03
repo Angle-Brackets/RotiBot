@@ -30,10 +30,9 @@ class Motd(commands.GroupCog, group_name="motd"):
 
             # If the motd database entry is non-empty for a server
             if motd_entry:
-                await interaction.followup.send("Successfully added new message of the day: \"{0}\"\n Overwrote previous entry: \"{1}\"".format(
-                        motd, motd_entry))
+                await interaction.followup.send(f"Successfully added new message of the day: \"{motd}\"\n Overwrote previous entry: \"{motd_entry}\"")
             else:
-                await interaction.followup.send("Successfully added new message of the day: \"{0}\"".format(motd))
+                await interaction.followup.send(f"Successfully added new message of the day: \"{motd}\"")
 
     @app_commands.command(name="clear", description="Removes the \"Message of the Day\" associated with this guild.")
     async def _motd_clear(self, interaction : discord.Interaction):
@@ -43,7 +42,7 @@ class Motd(commands.GroupCog, group_name="motd"):
         if motd_entry:
             self.db[interaction.guild_id, "motd"] = ""
             self.db.write_data(interaction.guild_id, "motd")
-            await interaction.followup.send("Successfully cleared MOTD associated with this guild: {0}".format(motd_entry))
+            await interaction.followup.send(f"Successfully cleared MOTD associated with this guild: {motd_entry}")
         else:
             await interaction.followup.send("There is no MOTD associated with this server currently, add one using /motd add!")
 
@@ -52,7 +51,7 @@ class Motd(commands.GroupCog, group_name="motd"):
         await interaction.response.defer()
         motd = self.db[interaction.guild_id, "motd"].unwrap()
         if motd:
-            await interaction.followup.send("The current MOTD associated with this server is: \"{0}\"".format(motd))
+            await interaction.followup.send(f"The current MOTD associated with this server is: \"{motd}\"")
         else:
             await interaction.followup.send("There is no MOTD associated with this server currently, add one using /motd add!")
 

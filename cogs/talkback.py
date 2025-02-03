@@ -52,11 +52,11 @@ def _add_talkback_phrase(serverID : int, db : RotiDatabase, trigger_phrases : st
                 for j in range(len(trigger_list)):
                     if trigger_list[j].casefold() in trigger_set:
                         if len(response_list) + len(r_data[i]) > 10:
-                            res += "Failed to merge duplicate trigger {0} due to response cap being exceeded.\n".format(trigger_list[j])
+                            res += f"Failed to merge duplicate trigger {trigger_list[j]} due to response cap being exceeded.\n"
                             trigger_list_copy.remove(trigger_list[j])
 
                         else:
-                            res += "Successfully merged trigger {0} with pre-existing talkback combo.\n".format(trigger_list[j])
+                            res += f"Successfully merged trigger {trigger_list[j]} with pre-existing talkback combo.\n"
                             trigger_list_copy.remove(trigger_list[j])
                             db[serverID, "response_phrases"].unwrap()[i] += response_list
 
@@ -102,7 +102,7 @@ def _generate_embed_and_triggers(guild : discord.Guild, db : RotiDatabase, msg =
 
     def _update_embed(embed, trigger_number, index):
         #This must be capped at 256 characters for field name (triggers) and 1024 for field values (responses) to avoid a crash
-        potential_trigger = "[{0}] ".format(trigger_number)
+        potential_trigger = f"[{trigger_number}] "
         trigger_display = ", ".join(trigger_phrases[index])
 
         #This will truncate triggers to 256 chars total.
@@ -147,7 +147,7 @@ def _generate_embed_and_triggers(guild : discord.Guild, db : RotiDatabase, msg =
 
     #Adds page numbers to the footer of each embed
     for i in range(len(all_embeds)):
-        all_embeds[i].set_footer(text="Page {0}/{1}".format(i+1, len(all_embeds)))
+        all_embeds[i].set_footer(text=f"Page {i+1}/{len(all_embeds)}")
 
     return [all_embeds, matched_triggers] if not list_enabled else all_embeds
 
