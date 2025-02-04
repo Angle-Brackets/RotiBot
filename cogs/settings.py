@@ -22,7 +22,7 @@ class Settings(commands.GroupCog, group_name="settings"):
             await interaction.followup.send(f"Currently, I am toggled to {"respond to talkback triggers." if current_state else "not respond to talkback triggers."}")
         else:
             self.db[interaction.guild_id, "settings", "talkback", "enabled"] = state
-            self.db.write_data(interaction.guild_id, "settings")
+            self.db.write_data(interaction.guild_id, "settings", "talkback", "enabled")
             await interaction.followup.send(f"Successfully {"enabled talkback responses" if state else "disabled talkback responses."}")
 
     @talkback_group.command(name="strict", description="Toggles if Roti will be \"strict\" in matching triggers to talkbacks / only look for exact matches.")
@@ -34,7 +34,7 @@ class Settings(commands.GroupCog, group_name="settings"):
             await interaction.followup.send(f"Currently, I am toggled to {"be strict with talkback triggers." if current_state else "not be strict with talkback triggers."}")
         else:
             self.db[interaction.guild_id, "settings", "talkback", "strict"] = state
-            self.db.write_data(interaction.guild_id, "settings")
+            self.db.write_data(interaction.guild_id, "settings", "talkback", "strict")
             await interaction.followup.send(f"Successfully {"enabled strict talkback trigger matching." if state else "disabled strict talkback trigger matching."}")
 
     @talkback_group.command(name="duration", description="Time in seconds before a talkback response is deleted (0 makes messages permanent).")
@@ -45,7 +45,7 @@ class Settings(commands.GroupCog, group_name="settings"):
             await interaction.followup.send(f"Currently, my responses are {"not set to delete themselves automatically" if not current_length else "set to delete themselves after " + str(current_length) + " seconds."}")
         else:
             self.db[interaction.guild_id, "settings", "talkback", "duration"] = length
-            self.db.write_data(interaction.guild_id, "settings")
+            self.db.write_data(interaction.guild_id, "settings", "talkback", "duration")
             await interaction.followup.send(f"Successfully {"set talkback responses to be delete after " + str(length) + " seconds." if length > 0 else "set talkback responses to remain permanently in chat."}")
 
     @talkback_group.command(name="probability", description="Probability that Roti will respond to a talkback trigger, percentage from 0 - 100%.")
@@ -56,7 +56,7 @@ class Settings(commands.GroupCog, group_name="settings"):
             await interaction.followup.send(f"Currently, I have a {current_prob}% chance to respond to talkback triggers.")
         else:
             self.db[interaction.guild_id, "settings", "talkback", "res_probability"] = probability
-            self.db.write_data(interaction.guild_id, "settings")
+            self.db.write_data(interaction.guild_id, "settings", "talkback", "res_probability")
             await interaction.followup.send(f"Successfully set probability to respond to talkbacks to {probability}%")
 
     @talkback_group.command(name="ai_probability", description="Probability an AI response will occur, percentage from 0 - 100%.")
@@ -67,7 +67,7 @@ class Settings(commands.GroupCog, group_name="settings"):
             await interaction.followup.send(f"Currently, I have a {current_prob}% chance to randomly respond with an AI message.")
         else:
             self.db[interaction.guild_id, "settings", "talkback", "ai_probability"] = probability
-            self.db.write_data(interaction.guild_id, "settings")
+            self.db.write_data(interaction.guild_id, "settings", "talkback", "ai_probability")
             await interaction.followup.send(f"Successfully set probability to randomly respond with an AI message to {probability}%")
 
 async def setup(bot: commands.Bot):

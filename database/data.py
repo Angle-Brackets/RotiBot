@@ -39,6 +39,17 @@ _SCHEMA = {
             "pitch": 100 # Pitch of the music, x0 to x5.
         }
     },
+    # / permissions set <category> <permission levels options> [cmd] 
+    # "permissions": {
+    #     "talkback": {
+    #         "enabled": [],
+    #         "duration": [],
+    #         "strict": [],
+    #         "res_probability": [],
+    #         "ai_probability": [],
+    #     },
+    #     "music "
+    # }
 }
 
 bot_start_time = time.time()
@@ -68,9 +79,34 @@ class RotiDatabase(metaclass=Singleton):
         return value in self._db
 
     def __getitem__(self, keys : Tuple[int, str, Unpack[Tuple[str, ...]]]) -> Result[Any, DatabaseError]:
-        return self.read_data(keys)
+        return self._get_nested(keys)
 
     def __setitem__(self, keys : Tuple[int, str, Unpack[Tuple[str, ...]]], value : Any) -> Maybe[DatabaseError]:
+        return self._set_nested(keys, value)
+    
+    """
+    Reads from the in-memory db, indexing with the variable amount of keys provided.
+    The first value is always the server id, the second is always some key, after that there
+    can be a variable number of keys that are always strings.
+    """
+    def _get_nested(self, keys : Tuple[int, str, Unpack[Tuple[str, ...]]]) -> Result[Any, DatabaseError]:
+        try:
+            data = self._db
+            for key in keys:
+                data = data[key]
+        except KeyError as ke:
+            return Failure(DatabaseError(f"KeyError: {ke} not found in database."))
+        except TypeError as te:
+            return Failure(DatabaseError(f"Invalid key path: {keys}"))
+        
+        return Success(data)
+    
+    """
+    Writes to the in-memory db, indexing with the variable amount of keys provided.
+    The first value is always the server id, the second is always some key, after that there
+    can be a variable number of keys that are always strings.
+    """
+    def _set_nested(self, keys : Tuple[int, str, Unpack[Tuple[str, ...]]], value : Any) -> Maybe[DatabaseError]:
         try:
             data = self._db
             key_to_change = keys[-1]
@@ -104,7 +140,8 @@ class RotiDatabase(metaclass=Singleton):
         # To get a server's data, you need to do db[<server_id>][<category>] (ID IS A INTEGER!)
         for data in self._collections.find({}):
             self._db[data['server_id']] = data
-            self._recursive_dict_copy(self._db[data['server_id']], _SCHEMA)
+            # TODO: Reapply this 
+            #self._recursive_dict_copy(self._db[data['server_id']], _SCHEMA)
 
     def update_database(self, guild : discord.Guild) -> str:
         serverID = guild.id
@@ -126,29 +163,24 @@ class RotiDatabase(metaclass=Singleton):
     
     # Updates the database with the given key.
     # Ex. passing key = "trigger_phrases" will appropriately update the trigger database for the given server
-    def write_data(self, server_id : int, key: str) -> Maybe[ConnectionError]:
+    def write_data(self, server_id : int, *keys : str) -> Maybe[DatabaseError]:
         try:
-            self._collections.update_one({"server_id": server_id}, {"$set": {key: self._db[server_id][key]}})
+            if server_id not in self._db:
+                return Some(DatabaseError(f"Invalid server_id passed: {server_id}"))
+            
+            full_path = (server_id, ) + keys
+            match self._get_nested(full_path):
+                case Success(value):
+                    key_path = ".".join(keys)
+                    self._collections.update_one({"server_id": server_id}, {"$set": {key_path: value}})
+                case Failure(error):
+                    return Some(error)
             return Nothing
         except Exception as e:
-            return Some(ConnectionError("Unable to connect to database"))
+            return Some(DatabaseError("Unable to connect to database"))
     
-    """
-    Reads from the database, indexing with the variable amount of keys provided.
-    The first value is always the server id, the second is always some key, after that there
-    can be a variable number of keys that are always strings.
-    """
     def read_data(self, keys : Tuple[int, str, Unpack[Tuple[str, ...]]]) -> Result[Any, DatabaseError]:
-        try:
-            data = self._db
-            for key in keys:
-                data = data[key]
-        except KeyError as ke:
-            return Failure(DatabaseError(f"KeyError: {ke} not found in database."))
-        except TypeError as te:
-            return Failure(DatabaseError(f"Invalid key path: {keys}"))
-        
-        return Success(data)
+        return self._get_nested(keys)
 
 def calculate_uptime() -> str:
         total_seconds = int(time.time() - bot_start_time)
