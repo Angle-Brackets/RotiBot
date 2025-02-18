@@ -12,6 +12,7 @@ from discord import app_commands
 from dotenv import load_dotenv
 from database.data import RotiDatabase
 from time import strftime, gmtime
+from utils.command_utils import cog_command
 
 """
 Some notes about music functionality:
@@ -67,6 +68,7 @@ Note about the implementation of the queue for this bot, while it might seem str
 the song finishes rather than when it starts in order to display all the songs in /queue to avoid confusion.
 """
 
+@cog_command
 class Music(commands.Cog):
     def __init__(self, bot : commands.Bot):
         self.bot = bot

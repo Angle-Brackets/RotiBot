@@ -7,6 +7,8 @@ import os
 import wavelink
 import argparse
 import logging
+import inspect
+import importlib
 
 from dotenv import load_dotenv
 from discord.ext import commands
@@ -20,16 +22,11 @@ class Roti(commands.Bot):
     def __init__(self):
         logging.basicConfig(level="INFO")
         self.logger = logging.getLogger(__name__)
-
-        # Flags to disable features during testing
-        self.parser = argparse.ArgumentParser()
-        self.parser.add_argument("--nomusic", action=argparse.BooleanOptionalAction, help="Disable Music Functionality")
-        self.parser.add_argument("--test", action=argparse.BooleanOptionalAction, help="Enable testing mode")
-        self.args = self.parser.parse_args()
+        self.parser = argparse.ArgumentParser() # Flags to enable/disable features during testing
+        self._setup_cli_args()
 
         self.test_build = bool(self.args.test)
         self.db = RotiDatabase(os.getenv("DATABASE"))
-
         super().__init__(
             command_prefix = "$",
             intents = discord.Intents.all(),
@@ -42,19 +39,54 @@ class Roti(commands.Bot):
 
     async def setup_hook(self):
         self.session = aiohttp.ClientSession()
-        for cog_file in os.listdir("./cogs"):
-            if cog_file.endswith(".py"):
-                await self.load_extension(f"cogs.{cog_file[:-3]}")
+        await self._load_cogs()
 
         # Music bot setup
         if not self.args.nomusic:
-            nodes = [wavelink.Node(uri=fr"http://{os.getenv("MUSIC_IP")}:2333", password=os.getenv("MUSIC_PASS"))]
-            await wavelink.Pool.connect(nodes=nodes, client=self, cache_capacity=100)
+            await self._setup_music_functionality()
         else:
             self.logger.warning("Music Functionality is Disabled!")
-        
-        await roti.tree.sync()
 
+        await roti.tree.sync()
+    
+    async def _load_cogs(self):
+        show_output : bool = self.args.show_cog_load
+        for root, _, files in os.walk("./cogs"):
+            for file in files:
+                if file.endswith(".py"):
+                    relative_path = os.path.relpath(root, "./cogs").replace(os.sep, ".")
+                    module_name = f"cogs.{relative_path}.{file[:-3]}" if relative_path != "." else f"cogs.{file[:-3]}"
+                    
+                    try:
+                        module = importlib.import_module(module_name)
+                        
+                        # Check if any class is a tagged cog
+                        is_cog = any(
+                            getattr(obj, "is_cog", False)
+                            for _, obj in inspect.getmembers(module, inspect.isclass)
+                        )
+
+                        if is_cog:
+                            if show_output:
+                                self.logger.info(f"Loading {module_name} as cog command module.")
+                            await self.load_extension(module_name)
+                        else:
+                            if show_output:
+                                self.logger.info(f"Skipping {module_name}")
+                    
+                    except Exception as e:
+                        self.logger.error(f"Failed to load {module_name}: {e}")
+        
+    async def _setup_music_functionality(self):
+        nodes = [wavelink.Node(uri=fr"http://{os.getenv("MUSIC_IP")}:2333", password=os.getenv("MUSIC_PASS"))]
+        await wavelink.Pool.connect(nodes=nodes, client=self, cache_capacity=100)
+    
+    def _setup_cli_args(self):
+        self.parser.add_argument("--nomusic", action=argparse.BooleanOptionalAction, help="Disable Music Functionality")
+        self.parser.add_argument("--test", action=argparse.BooleanOptionalAction, help="Enable testing mode")
+        self.parser.add_argument("--show-cog-load", "-scl", action=argparse.BooleanOptionalAction, help="Show what cogs are loaded during startup.")
+        self.args = self.parser.parse_args()
+        
     async def close(self):
         await super().close()
         await self.session.close()

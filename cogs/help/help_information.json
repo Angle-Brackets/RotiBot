@@ -45,12 +45,12 @@
       "clear": {
         "description": "Removes the MOTD/status associated with this guild.",
         "usage": "/motd clear",
-        "arguments": "None"
+        "arguments": {}
       },
       "show": {
         "description": "Displays the current MOTD/Status associated with this guild.",
         "usage": "/motd show",
-        "arguments": "None"
+        "arguments": {}
       }
     }
   },
@@ -63,12 +63,12 @@
       "join": {
         "description": "Forces Roti to connect to the current voice channel of the user that activated the command.",
         "usage": "/join (must be in a voice channel)",
-        "arguments": "None"
+        "arguments": {}
       },
       "disconnect": {
         "description": "Disconnects Roti from the current voice channel.",
         "usage": "/disconnect (must be in a voice channel)",
-        "arguments": "None"
+        "arguments": {}
       },
      "play": {
        "description": "If the queue is empty, plays a new song, otherwise adds it to the queue.",
@@ -80,22 +80,22 @@
      "queue": {
        "description": "Displays the current state of the music queue and the current song's remaining time. Queue is cleared when Roti is disconnected or when all users disconnect from a voice channel. Also displays visual icons for track controls.",
        "usage": "/queue (must be in a voice channel)",
-       "arguments": "None"
+       "arguments": {}
      },
      "pause": {
        "description": "Pauses Roti and the Queue.",
        "usage": "/pause (must be in a voice channel)",
-       "arguments": "None"
+       "arguments": {}
      },
       "resume": {
         "description": "Resumes Roti if it was paused.",
         "usage": "/resume (must be in a voice channel)",
-        "arguments": "None"
+        "arguments": {}
       },
       "skip": {
         "description": "Skips the current song Roti is playing.",
         "usage": "/skip (must be in a voice channel)",
-        "arguments": "None"
+        "arguments": {}
       },
       "loop": {
         "description": "Allows for the current song to be looped indefinitely.",
@@ -179,7 +179,7 @@
       "random": {
         "description": "Generates a random Wikipedia article. (This might take awhile, be patient!)",
         "usage": "/wikipedia random",
-        "arguments": "None"
+        "arguments": {}
       },
       "search": {
         "description": "Searches for a wikipedia article from a given query. If no exact/near match is found, Roti will generate 25 potential pages you might be interested in, and can select from the dropdown provided. (This might take awhile, be patient!)",
@@ -214,7 +214,7 @@
       "random": {
         "description": "Displays a random quote. Will **only** search for quotes that have \"default\" responses!",
         "usage": "/quote random",
-        "arguments": "None"
+        "arguments": {}
       },
       "say": {
         "description": "Displays a specific quote.",
@@ -254,7 +254,7 @@
       "waifu": {
         "description": "Have a randomly generated waifu appear. They do not exist sadly..",
         "usage": "/generate waifu",
-        "arguments": "None"
+        "arguments": {}
       },
       "image": {
         "description": "Have an AI generate...anything! Use this command at your own risk!",
@@ -307,7 +307,7 @@
       "changelog": {
         "description": "Displays the changelog",
         "usage": "/changelog",
-        "arguments": "None"
+        "arguments": {}
       }
     }
   }

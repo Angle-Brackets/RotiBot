@@ -4,8 +4,10 @@ from discord.ext import commands
 from discord import app_commands
 from discord.app_commands import checks
 from datetime import datetime, timezone
+from utils.command_utils import cog_command
 
 # These commands don't have help pages because they are merely debug commands and aren't for normal use.
+@cog_command
 class Debug(commands.Cog):
     def __init__(self, bot : commands.Bot):
         super().__init__()

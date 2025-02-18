@@ -39,17 +39,62 @@ _SCHEMA = {
             "pitch": 100 # Pitch of the music, x0 to x5.
         }
     },
-    # / permissions set <category> <permission levels options> [cmd] 
-    # "permissions": {
-    #     "talkback": {
-    #         "enabled": [],
-    #         "duration": [],
-    #         "strict": [],
-    #         "res_probability": [],
-    #         "ai_probability": [],
-    #     },
-    #     "music "
-    # }
+     
+    # Each permission is under a category, which is then linked to an array of required permissions to use it. 
+    # If its blank, anyone can use it.
+    "permissions": {
+        "talkbacks": {
+            "add": [],
+            "remove": [],
+            "list": []
+        },
+        "motd" : {
+            "add": [],
+            "clear": [],
+            "show": []
+        },
+        "music": {
+            "join": [],
+            "disconnect": [],
+            "play": [],
+            "queue": [],
+            "pause": [],
+            "resume": [],
+            "skip": [],
+            "loop": [],
+            "volume": [],
+            "speed": [],
+            "pitch": []
+        },
+        "settings": {
+            "talkback enable": [],
+            "talkback strict": [],
+            "talkback duration": [],
+            "talkback probability": [],
+            "talkback ai_probability": [],
+        },
+        "wikipedia": {
+            "random": [],
+            "search": []
+        },
+        "quotes": {
+            "list": [],
+            "remove": [],
+            "random": [],
+            "say": [],
+            "add nonreplaceable": [],
+            "add replaceable": []
+        },
+        "generate": {
+            "waifu": [],
+            "image": [],
+            "text": []
+        },
+        "execute": {
+            "file": [],
+            "script": []
+        }
+    }
 }
 
 bot_start_time = time.time()
@@ -70,10 +115,10 @@ class RotiDatabase(metaclass=Singleton):
         self._db : Dict[str, Any] = dict() # Used for quick access to the data, but changes need to be pushed!
 
         # Initialize database.
-        start = time.time()
+        start = time.perf_counter()
         self.logger.info("Initializing Database...")
         self._download_database()
-        self.logger.info(f"Database Initialized in {round(1000*(time.time() - start), 2)}ms")
+        self.logger.info(f"Database Initialized in {round(1000*(time.perf_counter() - start), 2)}ms")
 
     def __contains__(self, value):
         return value in self._db

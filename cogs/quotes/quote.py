@@ -7,6 +7,7 @@ import re
 from discord import app_commands
 from discord.ext import commands
 from database.data import RotiDatabase
+from utils.command_utils import cog_command
 
 #This is a reference for the quote structure that is stored in the array.
 QUOTE_STRUCTURE = {
@@ -24,6 +25,7 @@ def build_quote(quote_obj : dict):
     else:
         return quote_obj["default"] + f"\n-{quote_obj["name"]}"
 
+@cog_command
 class Quote(commands.GroupCog, group_name="quote"):
     def __init__(self, bot : commands.Bot):
         super().__init__()

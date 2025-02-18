@@ -9,10 +9,11 @@ import time
 import asyncio
 import logging
 
+from utils.command_utils import cog_command
 from database.data import RotiDatabase
 from discord.ext import commands
 from discord import app_commands
-from utils.RotiBrain import RotiBrain
+from cogs.generate.RotiBrain import RotiBrain
 from returns.result import Result, Success, Failure
 from returns.maybe import Maybe, Some, Nothing
 from typing import Optional
@@ -151,6 +152,7 @@ def _generate_embed_and_triggers(guild : discord.Guild, db : RotiDatabase, msg =
 
     return [all_embeds, matched_triggers] if not list_enabled else all_embeds
 
+@cog_command
 class Talkback(commands.GroupCog, group_name="talkback"):
     def __init__(self, bot : commands.Bot):
         super().__init__()

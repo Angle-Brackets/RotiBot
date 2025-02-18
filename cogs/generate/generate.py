@@ -4,16 +4,17 @@ import time
 import json
 import asyncio
 
-from utils.RotiBrain import RotiBrain
+from cogs.generate.RotiBrain import RotiBrain
 from discord.ext import commands
 from discord import app_commands
 
 from enum import Enum
 from typing import Optional, List
+from utils.command_utils import cog_command
 
 embed = discord.Embed(color=0xecc98e)
 
-
+@cog_command
 class Generate(commands.GroupCog, group_name = "generate"):
     def __init__(self, bot : commands.Bot):
         super().__init__()
