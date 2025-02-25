@@ -5,25 +5,25 @@ import logging
 
 from dataclasses import dataclass
 from typing import Optional, List, Dict
-from database.data import calculate_uptime
+from database.bot_state import RotiState
 from discord.ext import commands
 from discord import app_commands
 from utils.command_utils import cog_command
 
 # Help Information JSON Format
-@dataclass
+@dataclass(frozen=True)
 class CommandArgument:
     name: str
     description: str
 
-@dataclass
+@dataclass(frozen=True)
 class Command:
     name: str
     description: str
     usage: str
     arguments: Dict[str, CommandArgument]  # Maps argument name to its description
 
-@dataclass
+@dataclass(frozen=True)
 class Category:
     name: str
     title: str
@@ -59,7 +59,8 @@ class Help(commands.Cog):
     @app_commands.command(name="help", description="Displays the help listing for all commands.")
     async def _help(self, interaction: discord.Interaction, category: Optional[str]):
         await interaction.response.defer()
-        view = HelpNav(self.help_information, self.help_information.categories[category])
+        command_page = self.help_information.categories[category] if category else None
+        view = HelpNav(self.help_information, command_page)
 
         embed = None
         if not category:
@@ -107,7 +108,7 @@ class Help(commands.Cog):
 
                 embed.add_field(
                     name="General Information",
-                    value=f"Uptime: ``{calculate_uptime()}``\nRoti currently has ``{total_categories}`` categories available, "
+                    value=f"Uptime: ``{RotiState.calculate_uptime()}``\nRoti currently has ``{total_categories}`` categories available, "
                         f"with a total of ``{total_commands}`` commands available!",
                     inline=False
                 )

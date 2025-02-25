@@ -8,18 +8,19 @@ class RotiState(metaclass=Singleton):
     Management class to keep track of global state and environment variables for Roti \n
     READ ONLY!
     """
+    start_time = time.time()
     def __init__(self):
         self.__dict__["credentials"] = BotCredentials()
-        self.__dict__["start_time"] = time.time()
     
-    def calculate_uptime(self) -> str:
-        total_seconds = int(time.time() - self.start_time)
+    @classmethod
+    def calculate_uptime(cls) -> str:
+        total_seconds = int(time.time() - cls.start_time)
         days = total_seconds // 86400
         hours = (total_seconds % 86400) // 3600
         minutes = (total_seconds % 3600) // 60
         seconds = total_seconds % 60
 
-        return f"{days}d {hours}h {minutes}m {seconds}s"
+        return f"{days}d {hours}h {minutes}m F{seconds}s"
 
     def __setattr__(self, key, value):
         """ Prevents modification of attributes after initialization. """
