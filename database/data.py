@@ -1,4 +1,3 @@
-import os
 import time
 import discord 
 
@@ -9,6 +8,7 @@ from copy import deepcopy
 from typing import Dict, Any, Optional, Tuple, Unpack, TypedDict
 from returns.result import Result, Success, Failure
 from returns.maybe import Maybe, Some, Nothing
+from database.bot_state import RotiState
 import logging
 
 """
@@ -38,66 +38,10 @@ _SCHEMA = {
             "volume": 100, #Base volume of Roti while playing music, percentage of 0 - 100%.
             "pitch": 100 # Pitch of the music, x0 to x5.
         }
-    },
-     
-    # Each permission is under a category, which is then linked to an array of required permissions to use it. 
-    # If its blank, anyone can use it.
-    "permissions": {
-        "talkbacks": {
-            "add": [],
-            "remove": [],
-            "list": []
-        },
-        "motd" : {
-            "add": [],
-            "clear": [],
-            "show": []
-        },
-        "music": {
-            "join": [],
-            "disconnect": [],
-            "play": [],
-            "queue": [],
-            "pause": [],
-            "resume": [],
-            "skip": [],
-            "loop": [],
-            "volume": [],
-            "speed": [],
-            "pitch": []
-        },
-        "settings": {
-            "talkback enable": [],
-            "talkback strict": [],
-            "talkback duration": [],
-            "talkback probability": [],
-            "talkback ai_probability": [],
-        },
-        "wikipedia": {
-            "random": [],
-            "search": []
-        },
-        "quotes": {
-            "list": [],
-            "remove": [],
-            "random": [],
-            "say": [],
-            "add nonreplaceable": [],
-            "add replaceable": []
-        },
-        "generate": {
-            "waifu": [],
-            "image": [],
-            "text": []
-        },
-        "execute": {
-            "file": [],
-            "script": []
-        }
     }
 }
 
-bot_start_time = time.time()
+
 class DatabaseError(Exception):
     def __init__(self, reason : Optional[str]):
         super().__init__(reason)
@@ -107,8 +51,9 @@ class DatabaseError(Exception):
 The optional is required for the first instantiation of the Singleton.
 """
 class RotiDatabase(metaclass=Singleton):
-    def __init__(self, database_url : Optional[str]):
-        self._database_url = database_url
+    def __init__(self):
+        self.state = RotiState()
+        self._database_url = self.state.credentials.database_url
         self.logger = logging.getLogger(__name__)
         self._cluster : MongoClient = MongoClient(self._database_url)
         self._collections = self._cluster["Roti"]["data"]
@@ -226,15 +171,6 @@ class RotiDatabase(metaclass=Singleton):
     
     def read_data(self, keys : Tuple[int, str, Unpack[Tuple[str, ...]]]) -> Result[Any, DatabaseError]:
         return self._get_nested(keys)
-
-def calculate_uptime() -> str:
-        total_seconds = int(time.time() - bot_start_time)
-        days = total_seconds // 86400
-        hours = (total_seconds % 86400) // 3600
-        minutes = (total_seconds % 3600) // 60
-        seconds = total_seconds % 60
-
-        return f"{days}d {hours}h {minutes}m {seconds}s"
 
 # Global used in the music.py file for /filter's modal
 FilterParams = Enum("DistortionType", ["TREMOLO", "VIBRATO", "ROTATION", "DISTORTION"])

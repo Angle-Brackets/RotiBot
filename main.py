@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from discord.ext import commands
 from discord.utils import find
 from database.data import RotiDatabase
+from database.bot_state import RotiState
 from returns.maybe import Some, Nothing, Maybe
 
 #load credentials
@@ -26,11 +27,12 @@ class Roti(commands.Bot):
         self._setup_cli_args()
 
         self.test_build = bool(self.args.test)
-        self.db = RotiDatabase(os.getenv("DATABASE"))
+        self.state = RotiState()
+        self.db = RotiDatabase()
         super().__init__(
             command_prefix = "$",
             intents = discord.Intents.all(),
-            application_id = os.getenv('APPLICATION_ID') if not self.test_build else os.getenv('TEST_APPLICATION_ID')
+            application_id = self.state.credentials.application_id if not self.test_build else self.state.credentials.test_application_id
         )
 
     async def on_ready(self):
@@ -78,7 +80,7 @@ class Roti(commands.Bot):
                         self.logger.error(f"Failed to load {module_name}: {e}")
         
     async def _setup_music_functionality(self):
-        nodes = [wavelink.Node(uri=fr"http://{os.getenv("MUSIC_IP")}:2333", password=os.getenv("MUSIC_PASS"))]
+        nodes = [wavelink.Node(uri=fr"http://{self.state.credentials.music_ip}:2333", password=self.state.credentials.music_pass)]
         await wavelink.Pool.connect(nodes=nodes, client=self, cache_capacity=100)
     
     def _setup_cli_args(self):
@@ -117,4 +119,4 @@ class Roti(commands.Bot):
                 self.logger.critical("Deleted guild %s's data.", guild.name)
 
 roti = Roti()
-roti.run(os.getenv('TOKEN') if not roti.test_build else os.getenv('TEST_TOKEN'))
+roti.run(roti.state.credentials.token if not roti.test_build else roti.state.credentials.test_token)
