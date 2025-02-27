@@ -59,7 +59,6 @@ class Quote(commands.GroupCog, group_name="quote"):
 
         quotes.append(new_quote)
         self.db[interaction.guild_id, "quotes"] = quotes
-        self.db.write_data(interaction.guild_id, "quotes")
         await interaction.followup.send("Successfully added new quote.")
 
     @add_group.command(name="replaceable", description="Creates a new quote that has replaceable portions.")
@@ -267,7 +266,6 @@ class Quote_Modal(discord.ui.Modal, title = "Make a new Replaceable Quote!"):
             new_quote["default"] = self.default.value if new_quote["has_original"] else "None"
             quotes.append(new_quote)
             self.db[interaction.guild_id, "quotes"] = quotes
-            self.db.write_data(interaction.guild_id, "quotes")
             await interaction.response.send_message("Successfully added new quote.")
 
 def _generate_options(current_page, embeds):
@@ -353,7 +351,6 @@ class Navigation(discord.ui.View):
             quote_to_delete = quotes[index]
             del quotes[index]
             self.db[interaction.guild_id, "quotes"] = quotes
-            self.db.write_data(interaction.guild_id, "quotes")
             await interaction.response.send_message(content=f"Successfully deleted the quote: {quote_to_delete["default"] if quote_to_delete["has_original"] else quote_to_delete["quote"]}\n-{quote_to_delete["name"] if quote_to_delete["name"] != "None" else "???"}")
             await self.message.delete()
         self.stop()

@@ -91,6 +91,7 @@ class Roti(commands.Bot):
         
     async def close(self):
         await super().close()
+        await self.db.shutdown()
         await self.session.close()
 
     async def on_guild_join(self, guild : discord.Guild):

@@ -28,7 +28,6 @@ class Motd(commands.GroupCog, group_name="motd"):
             await interaction.followup.send("Failed to add given Message of the Day - Message exceeded max of 128 characters.")
         else:
             self.db[interaction.guild_id, "motd"] = motd
-            self.db.write_data(interaction.guild_id, "motd")
 
             # If the motd database entry is non-empty for a server
             if motd_entry:
@@ -43,7 +42,6 @@ class Motd(commands.GroupCog, group_name="motd"):
 
         if motd_entry:
             self.db[interaction.guild_id, "motd"] = ""
-            self.db.write_data(interaction.guild_id, "motd")
             await interaction.followup.send(f"Successfully cleared MOTD associated with this guild: {motd_entry}")
         else:
             await interaction.followup.send("There is no MOTD associated with this server currently, add one using /motd add!")

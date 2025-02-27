@@ -5,11 +5,14 @@ from utils.Singleton import Singleton
 from pymongo import MongoClient
 from enum import Enum
 from copy import deepcopy
-from typing import Dict, Any, Optional, Tuple, Unpack, TypedDict
+from typing import Dict, Any, Optional, Tuple, Unpack
 from returns.result import Result, Success, Failure
 from returns.maybe import Maybe, Some, Nothing
 from database.bot_state import RotiState
+from concurrent.futures import Future
 import logging
+import asyncio
+import threading
 
 """
 This is the structure of the data that is stored in both MongoDB and 
@@ -41,15 +44,17 @@ _SCHEMA = {
     }
 }
 
-
+"""
+Data types and Wrapper classes
+"""
 class DatabaseError(Exception):
     def __init__(self, reason : Optional[str]):
         super().__init__(reason)
         self.reason = reason
 
-"""
-The optional is required for the first instantiation of the Singleton.
-"""
+KeyType = Tuple[int, str, Unpack[Tuple[str, ...]]]
+DatabaseRequest = Tuple[KeyType, Any, Future]
+
 class RotiDatabase(metaclass=Singleton):
     def __init__(self):
         self.state = RotiState()
@@ -57,7 +62,7 @@ class RotiDatabase(metaclass=Singleton):
         self.logger = logging.getLogger(__name__)
         self._cluster : MongoClient = MongoClient(self._database_url)
         self._collections = self._cluster["Roti"]["data"]
-        self._db : Dict[str, Any] = dict() # Used for quick access to the data, but changes need to be pushed!
+        self._db : Dict[int, Dict[str, Any]] = dict() # Used for quick access to the data, but changes need to be pushed!
 
         # Initialize database.
         start = time.perf_counter()
@@ -65,15 +70,91 @@ class RotiDatabase(metaclass=Singleton):
         self._download_database()
         self.logger.info(f"Database Initialized in {round(1000*(time.perf_counter() - start), 2)}ms")
 
+        # Initialize Database Request Queue
+        start = time.perf_counter()
+        self.logger.info("Initializing Database Request Queue...")
+        self._database_active = True
+        self._loop = asyncio.new_event_loop()
+        self._requests : asyncio.Queue[DatabaseRequest] = asyncio.Queue()
+        self._worker_thread = threading.Thread(target=self._run_request_event_loop, name="Database Request Daemon", daemon=True)
+        self._worker_thread.start()
+        asyncio.run_coroutine_threadsafe(coro=self._process_requests(), loop=self._loop)
+        self.logger.info(f"Database Request Queue Initialized in {round(1000*(time.perf_counter() - start), 2)}ms")
+
+
     def __contains__(self, value):
         return value in self._db
 
     def __getitem__(self, keys : Tuple[int, str, Unpack[Tuple[str, ...]]]) -> Result[Any, DatabaseError]:
         return self._get_nested(keys)
 
-    def __setitem__(self, keys : Tuple[int, str, Unpack[Tuple[str, ...]]], value : Any) -> Maybe[DatabaseError]:
-        return self._set_nested(keys, value)
+    def __setitem__(self, keys : Tuple[int, str, Unpack[Tuple[str, ...]]], value : Any) -> Future:
+        """
+        Sets a value in the database asynchronously.
+        
+        Returns a Future that will be resolved when the database operation completes.
+        You can await this Future to wait for the operation to complete, or ignore it
+        to let it run in the background.
+        
+        Example usage:
+            # Non-blocking usage
+            db[(server_id, "settings", "talkback", "enabled")] = True
+            
+            # Blocking usage (wait for operation to complete)
+            future = db[(server_id, "settings", "talkback", "enabled")] = True
+            await future
+        """
+        # Update the in-memory database immediately
+        self._set_nested(keys, value)
+
+        future = Future()
+        self._loop.call_soon_threadsafe(self._requests.put_nowait, (keys, value, future))
+        return future
     
+    async def shutdown(self):
+        """Gracefully shut down the database worker"""
+        self.logger.info("Shutting down database worker...")
+        self._database_active = False
+        
+        # Wait for all queued operations to complete
+        if not self._requests.empty():
+            self.logger.info(f"Waiting for {self._requests.qsize()} pending database operations to complete...")
+            await self._requests.join()
+            
+        self._loop.call_soon_threadsafe(self._loop.stop)
+        self._worker_thread.join(timeout=5.0)
+        self.logger.info("Database worker shutdown complete")
+
+    def _run_request_event_loop(self):
+        asyncio.set_event_loop(self._loop)
+        self._loop.run_forever()
+    
+    async def _process_requests(self):
+        """
+        Continuously process database requests in order.
+        """
+        self.logger.info("Database request processor started")
+        while self._database_active or not self._requests.empty():
+            try:
+                keys, value, future = await self._requests.get()
+                self.logger.debug(f"Processing database write: {keys}, {value}")
+                try:
+                    match await self._write_to_database(keys, value):
+                        case Success(_):
+                            print(f"Successfully wrote to Database with keys: {keys} and value: {value}")
+                        case Failure(DatabaseError() as error):
+                            print(f"Failed to write to database with keys: {keys} and value: {value}\n" + error)
+                            future.set_exception(error)
+                except Exception as e:
+                    self.logger.error(f"Exception during database write: {str(e)}", exc_info=True)
+                    future.set_exception(e)
+                self._requests.task_done()
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                self.logger.error(f"Unexpected error in request processor: {str(e)}", exc_info=True)
+            
     """
     Reads from the in-memory db, indexing with the variable amount of keys provided.
     The first value is always the server id, the second is always some key, after that there
@@ -96,7 +177,7 @@ class RotiDatabase(metaclass=Singleton):
     The first value is always the server id, the second is always some key, after that there
     can be a variable number of keys that are always strings.
     """
-    def _set_nested(self, keys : Tuple[int, str, Unpack[Tuple[str, ...]]], value : Any) -> Maybe[DatabaseError]:
+    def _set_nested(self, keys : Tuple[int, str, Unpack[Tuple[str, ...]]], value : Any) -> Result[None, DatabaseError]:
         try:
             data = self._db
             key_to_change = keys[-1]
@@ -104,11 +185,11 @@ class RotiDatabase(metaclass=Singleton):
                 data = data[key]
             
             if not isinstance(value, type(data[key_to_change])):
-                return Some(DatabaseError(f"Source and destination type of value do not match. Expected: {type(data[key_to_change])}, got: {type(value)}."))
+                return Failure(DatabaseError(f"Source and destination type of value do not match. Expected: {type(data[key_to_change])}, got: {type(value)}."))
             data[key_to_change] = value
         except TypeError:
-            return Some(DatabaseError(f"Invalid key path! Keys: {keys}"))
-        return Nothing
+            return Failure(DatabaseError(f"Invalid key path! Keys: {keys}"))
+        return Success(None)
     
     """
     Recursively ensures all keys in `reference` exist in `target`.
@@ -151,23 +232,31 @@ class RotiDatabase(metaclass=Singleton):
         self._db[server_id].clear()
         return Nothing
     
-    # Updates the database with the given key.
-    # Ex. passing key = "trigger_phrases" will appropriately update the trigger database for the given server
-    def write_data(self, server_id : int, *keys : str) -> Maybe[DatabaseError]:
+    async def _write_to_database(self, keys: Tuple[int, str, Unpack[Tuple[str, ...]]], value: Any) -> Result[None, DatabaseError]:
+        """Performs the actual database write operation"""
         try:
+            server_id = keys[0]
             if server_id not in self._db:
-                return Some(DatabaseError(f"Invalid server_id passed: {server_id}"))
+                return Failure(DatabaseError(f"Invalid server_id passed: {server_id}"))
             
-            full_path = (server_id, ) + keys
-            match self._get_nested(full_path):
-                case Success(value):
-                    key_path = ".".join(keys)
-                    self._collections.update_one({"server_id": server_id}, {"$set": {key_path: value}})
-                case Failure(error):
-                    return Some(error)
-            return Nothing
+            # Create the MongoDB update path (e.g., "settings.talkback.enabled")
+            key_path = ".".join(keys[1:])
+            
+            # Update the MongoDB database
+            result = await asyncio.to_thread(
+                self._collections.update_one,
+                {"server_id": server_id},
+                {"$set": {key_path: value}}
+            )
+            
+            if result.modified_count == 0 and result.matched_count == 0:
+                return Failure(DatabaseError(f"No document found for server_id: {server_id}"))
+                
+            return Success(None)
+        except ConnectionError as ce:
+            return Failure(DatabaseError(f"Unable to connect to database: {ce}"))
         except Exception as e:
-            return Some(DatabaseError("Unable to connect to database"))
+            return Failure(DatabaseError(f"An exception occurred writing to the database: {e}"))
     
     def read_data(self, keys : Tuple[int, str, Unpack[Tuple[str, ...]]]) -> Result[Any, DatabaseError]:
         return self._get_nested(keys)

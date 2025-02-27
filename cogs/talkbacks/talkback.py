@@ -61,14 +61,14 @@ def _add_talkback_phrase(serverID : int, db : RotiDatabase, trigger_phrases : st
                             trigger_list_copy.remove(trigger_list[j])
                             db[serverID, "response_phrases"].unwrap()[i] += response_list
 
+            # TODO: Need to rewrite this.
             trigger_list = trigger_list_copy
-
-            db[serverID, "trigger_phrases"].unwrap().append(trigger_list)
-            db[serverID, "response_phrases"].unwrap().append(response_list)
-
-            #Updates mongo database
-            db.write_data(serverID, "trigger_phrases")
-            db.write_data(serverID, "response_phrases")
+            if trigger_list:
+                db[(serverID, "trigger_phrases")] = db[(serverID, "trigger_phrases")].value_or([]) + [trigger_list]
+                db[(serverID, "response_phrases")] = db[(serverID, "response_phrases")].value_or([]) + [response_list]
+            else:
+                db[(serverID, "trigger_phrases")] = db[(serverID, "trigger_phrases")].unwrap()
+                db[(serverID, "response_phrases")] = db[(serverID, "response_phrases")].unwrap()
 
             return "Successfully created new talkback." if not res else (res + "Successfully added new talkback.")
         except Exception as e:
@@ -85,6 +85,7 @@ def _add_talkback_phrase(serverID : int, db : RotiDatabase, trigger_phrases : st
 def _generate_embed_and_triggers(guild : discord.Guild, db : RotiDatabase, msg = "", list_enabled = False):
     msg = msg.strip()
     trigger_phrases = db[guild.id, "trigger_phrases"].unwrap()
+    response_phrases = db[guild.id, "response_phrases"].unwrap()
     all_embeds = list() #If somehow it exceeds the 6000 character limit, this stores all the embeds that the list gets split at for multiple pages. Also handles if there are greater than 25 fields in an embed...which is more common.
 
     matched_triggers = list()
@@ -112,7 +113,7 @@ def _generate_embed_and_triggers(guild : discord.Guild, db : RotiDatabase, msg =
         potential_trigger = potential_trigger + trigger_display
 
         #Similar idea for responses, must cap at 1024
-        potential_res = ", ".join(trigger_phrases[index])
+        potential_res = ", ".join(response_phrases[index])
 
         if len(potential_res) > 1024:
             potential_res = potential_res[:1021] + "..."
@@ -398,8 +399,6 @@ class Navigation(discord.ui.View):
         del responses[index]
         self.db[interaction.guild_id, "trigger_phrases"] = triggers
         self.db[interaction.guild_id, "response_phrases"] = responses
-        self.db.write_data(interaction.guild_id, "trigger_phrases")
-        self.db.write_data(interaction.guild_id, "response_phrases")
 
         await interaction.response.send_message(content="Successfully deleted trigger/response pair: " + str(t)[1:-1] + "/" + str(r)[1:-1])
         await self.message.delete()

@@ -322,7 +322,6 @@ class Music(commands.Cog):
             await interaction.followup.send(f"The current volume is: {self.db[interaction.guild_id, "settings", "music", "volume"].unwrap()}%",ephemeral=True)
         else:
             self.db[interaction.guild_id, "settings", "music", "volume"] = volume
-            self.db.write_data(interaction.guild_id, "settings", "music", "volume")
             if interaction.user.voice is None or not interaction.guild.voice_client:
                 await interaction.followup.send(f"Changed volume to {volume}%")
             else:
@@ -342,7 +341,6 @@ class Music(commands.Cog):
                 ephemeral=True)
         else:
             self.db[interaction.guild_id, "settings", "music", "speed"] = speed
-            self.db.write_data(interaction.guild_id, "settings", "music", "speed")
             if interaction.user.voice is None or not interaction.guild.voice_client:
                 await interaction.followup.send(f"Changed playback speed to {speed}%")
             else:
@@ -361,7 +359,6 @@ class Music(commands.Cog):
                 f"The current pitch is: {self.db[interaction.guild_id, "settings", "music", "pitch"].unwrap()}%", ephemeral=True)
         else:
             self.db[interaction.guild_id, "settings", "music", "pitch"] = pitch
-            self.db.write_data(interaction.guild_id, "settings", "music", "pitch")
             if interaction.user.voice is None or not interaction.guild.voice_client:
                 await interaction.followup.send(f"Changed playback pitch to {pitch}%")
             else:
