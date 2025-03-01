@@ -1,10 +1,12 @@
 import discord
+import pathlib
+import json
 
 from discord.ext import commands
 from discord import app_commands
 from discord.app_commands import checks
 from datetime import datetime, timezone
-from utils.command_utils import cog_command
+from utils.RotiUtilities import cog_command
 
 # These commands don't have help pages because they are merely debug commands and aren't for normal use.
 @cog_command
@@ -66,8 +68,8 @@ class Debug(commands.Cog):
         await ctx.message.delete()
 
     @commands.is_owner()
-    @app_commands.command(name="reload", description="DEBUG: Hot loads all commands")
-    async def _reload(self, interaction : discord.Interaction):
+    @commands.command(name="reload", description="DEBUG: Hot loads all commands")
+    async def _reload(self, ctx: commands.Context):
         reloaded = []
         failed = []
         for extension in list(self.bot.extensions.keys()):
@@ -82,7 +84,40 @@ class Debug(commands.Cog):
                 reloaded.append(extension)
 
         result = f"Successfully Reloaded:\n{"\n".join(reloaded)}\n\nFailed to reload:\n{"\n".join(failed)}"
-        await interaction.response.send_message(result, ephemeral=True)
+        await ctx.send(result, ephemeral=True)
+    
+    @commands.is_owner()
+    @commands.command(name="logs", description="DEBUG: Displays the last N logs")
+    async def _logs(self, ctx: commands.Context, n : int = 5):
+        # Checks if the directory exists, if not, makes it.
+        log_file = pathlib.Path("logs/roti.log.jsonl")
+        n = min(10, max(1, n))
+
+        if not log_file.exists():
+            await ctx.send("Log file not found.", ephemeral=True, delete_after=10)
+            return
+
+        msg = []
+        with open(log_file, "r") as f:
+            # Read last 10 lines 
+            f.seek(0, 2)  # Move cursor to the end of file
+            pos = f.tell()
+            lines = []
+            while pos > 0 and len(lines) < n:
+                pos -= 1
+                f.seek(pos)
+                if f.read(1) == "\n":
+                    line = f.readline().strip()
+                    if line:
+                        lines.append(line)
+
+        # Parse logs and format messages
+        for line in reversed(lines):
+            log = json.loads(line)
+            msg.append(f"[{log['level']}]\n{log['message']}")
+
+        result = f"```{"\n\n".join(msg[::-1])[:1950]}```"
+        await ctx.send(result, ephemeral=True, delete_after=30)
 
     # Misc Debug Commands - Anyone can use.
     @app_commands.command(name="ping", description="DEBUG: Gets the latency of the bot")

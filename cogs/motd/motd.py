@@ -7,7 +7,7 @@ from typing import Optional
 from discord import app_commands
 from discord.ext import commands, tasks
 from database.data import RotiDatabase
-from utils.command_utils import cog_command
+from utils.RotiUtilities import cog_command
 
 @cog_command
 class Motd(commands.GroupCog, group_name="motd"):

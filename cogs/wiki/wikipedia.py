@@ -8,7 +8,7 @@ import wikipediaapi as wiki
 from discord import app_commands
 from discord.ext import commands
 from bs4 import BeautifulSoup
-from utils.command_utils import cog_command
+from utils.RotiUtilities import cog_command
 
 #generates a random page.
 def _generate_random_page():

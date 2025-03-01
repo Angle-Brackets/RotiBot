@@ -12,7 +12,7 @@ from discord import app_commands
 from dotenv import load_dotenv
 from database.data import RotiDatabase
 from time import strftime, gmtime
-from utils.command_utils import cog_command
+from utils.RotiUtilities import cog_command
 
 """
 Some notes about music functionality:

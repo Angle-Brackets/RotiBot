@@ -7,7 +7,7 @@ import re
 from discord import app_commands
 from discord.ext import commands
 from database.data import RotiDatabase
-from utils.command_utils import cog_command
+from utils.RotiUtilities import cog_command
 
 #This is a reference for the quote structure that is stored in the array.
 QUOTE_STRUCTURE = {

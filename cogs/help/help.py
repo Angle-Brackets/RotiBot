@@ -8,7 +8,7 @@ from typing import Optional, List, Dict
 from database.bot_state import RotiState
 from discord.ext import commands
 from discord import app_commands
-from utils.command_utils import cog_command
+from utils.RotiUtilities import cog_command
 
 # Help Information JSON Format
 @dataclass(frozen=True)

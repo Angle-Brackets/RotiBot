@@ -4,7 +4,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from database.data import RotiDatabase
-from utils.command_utils import cog_command
+from utils.RotiUtilities import cog_command
 
 @cog_command
 class Settings(commands.GroupCog, group_name="settings"):

@@ -9,7 +9,7 @@ import time
 import asyncio
 import logging
 
-from utils.command_utils import cog_command
+from utils.RotiUtilities import cog_command
 from database.data import RotiDatabase
 from discord.ext import commands
 from discord import app_commands
@@ -202,9 +202,12 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         serverID = message.guild.id 
         probability = self.db[serverID, "settings", "talkback", "ai_probability"].unwrap() / 100
         channel : discord.TextChannel = message.channel
+        time_since_last = time.time() - self.last_response
 
-        if time.time() - self.last_response < self.cooldown:
-            return Failure(TalkbackError("Woah too fast! Try again in a moment!"))
+        # Enforce a sleep to not overload the API
+        if time_since_last < self.cooldown:
+            self.logger.info(f"AI Response requested too quickly for {message.guild.name}. Sleeping for {self.cooldown - time_since_last:.2f} seconds...")
+            time.sleep(self.cooldown - time_since_last)
 
         # If the bot isn't mentioned and the probability isn't reached, no response.
         if probability <= 0 or (self.bot.user not in message.mentions and random.random() >= probability):

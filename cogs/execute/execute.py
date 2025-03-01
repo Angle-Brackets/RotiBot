@@ -9,7 +9,7 @@ from discord.ext import commands
 from discord import app_commands
 from pyston.models import Output
 from functools import partial
-from utils.command_utils import cog_command
+from utils.RotiUtilities import cog_command
 
 @cog_command
 class Execute(commands.GroupCog, group_name="execute"):

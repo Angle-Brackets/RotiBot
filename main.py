@@ -15,12 +15,14 @@ from discord.ext import commands
 from discord.utils import find
 from database.data import RotiDatabase
 from database.bot_state import RotiState
+from utils.RotiUtilities import setup_logging
 from returns.maybe import Some, Nothing, Maybe
 
 #load credentials
 load_dotenv(".env")
 class Roti(commands.Bot):
     def __init__(self):
+        setup_logging(config_file="utils/logging_config.json")
         logging.basicConfig(level="INFO")
         self.logger = logging.getLogger(__name__)
         self.parser = argparse.ArgumentParser() # Flags to enable/disable features during testing
@@ -47,7 +49,7 @@ class Roti(commands.Bot):
         if not self.args.nomusic:
             await self._setup_music_functionality()
         else:
-            self.logger.warning("Music Functionality is Disabled!")
+            self.logger.info("Music Functionality is Disabled!")
 
         await roti.tree.sync()
     

@@ -10,7 +10,7 @@ from discord import app_commands
 
 from enum import Enum
 from typing import Optional, List
-from utils.command_utils import cog_command
+from utils.RotiUtilities import cog_command
 
 embed = discord.Embed(color=0xecc98e)
 
