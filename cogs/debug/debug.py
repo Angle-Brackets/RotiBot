@@ -114,7 +114,7 @@ class Debug(commands.Cog):
         # Parse logs and format messages
         for line in reversed(lines):
             log = json.loads(line)
-            msg.append(f"[{log['level']}]\n{log['message']}")
+            msg.append(f"[{log['level']}]\n{log['message'][:(1950//n)]}")
 
         result = f"```{"\n\n".join(msg[::-1])[:1950]}```"
         await ctx.send(result, ephemeral=True, delete_after=30)
