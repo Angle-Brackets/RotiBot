@@ -68,7 +68,7 @@ class BloomFilter[T]:
     
     def add(self, item : T):
         for hash_value in self._split_hash_values(item):
-            self._bloom_filter[hash_value % len(self._bloom_filter)] = 0x1
+            self._bloom_filter[hash_value % len(self._bloom_filter)] = 1
     
     def serialize(self) -> bytes:
         """
@@ -119,7 +119,7 @@ class BitArray:
     def _8_bools_to_int(bools) -> int:
         bin_str = ''.join('1' if b else '0' for b in reversed(bools))
         return int(bin_str, 2)
-
+    
     @classmethod
     def _to_bytes(cls, iterable, iter_len_out: list):
         iterable = (bool(x) for x in iterable)
@@ -140,36 +140,33 @@ class BitArray:
         return cls(data=data, size=size)
 
     @classmethod
-    def zeroes(cls, n : int):
+    def zeroes(cls, n: int):
         arr_size, remainder = divmod(n, 8)
         if remainder:
-            arr_size += 1 # Round up
+            arr_size += 1
         data = array.array('B', (0 for _ in range(arr_size)))
         return cls(data=data, size=n)
 
-    def _check_index(self, n : int):
+    def _check_index(self, n):
         if not isinstance(n, int):
-            raise TypeError("Expected Integer")
-        if not 0 <= n <= self.size:
+            raise TypeError("expected int")
+        if not 0 <= n < self.size:
             raise IndexError(n)
 
     def __getitem__(self, n):
         self._check_index(n)
         arr_idx, bit_idx = divmod(n, 8)
-        return (self.data[arr_idx] >> bit_idx) & 0xb1
+        return (self.data[arr_idx] >> bit_idx) & 0b1
 
     def __setitem__(self, n, bit):
         self._check_index(n)
         arr_idx, bit_idx = divmod(n, 8)
         data = self.data[arr_idx]
-        data &= ~(1 << bit_idx) # clears bit
-        data |= (bool(bit) * (1 << bit_idx)) # set
+        data &= ~(1 << bit_idx)  # clear bit
+        data |= (bool(bit) * (1 << bit_idx))  # set bit
         self.data[arr_idx] = data
     
     def serialize(self) -> bytes:
-        """
-        Serializes the 
-        """
         return pickle.dumps(self.data)
 
     def __repr__(self):
@@ -178,30 +175,3 @@ class BitArray:
     def __len__(self):
         return self.size
 
-def sha256_hash(s : str) -> int:
-    return int.from_bytes(hashlib.sha256(string=s.encode()).digest())
-    
-
-bloom_filter = BloomFilter[str](
-    bits=40_000,
-    hash_func=sha256_hash,
-    hash_digest_size=256 // 8,
-    num_hashes=5,
-    bytes_per_hash=6
-) # 5K bloom filter.
-print(bloom_filter.estimate_false_positive_rate(4096, pretty_print=True))
-bloom_filter.add("asjlkdjlasdljkas")
-serialized = bloom_filter.serialize()
-import sys
-print(sys.getsizeof(serialized))
-deserialized = pickle.loads(serialized)
-
-bf2 = BloomFilter.from_iterable(
-    hash_func=sha256_hash,
-    hash_digest_size=256//8,
-    num_hashes=5,
-    bytes_per_hash=6,
-    iterable=deserialized
-)
-
-print(bf2)

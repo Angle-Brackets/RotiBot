@@ -8,8 +8,10 @@ import random
 import time
 import asyncio
 import logging
+import hashlib
 
-from utils.RotiUtilities import cog_command
+from utils.BloomFilter import BloomFilter
+from utils.RotiUtilities import cog_command, single_run
 from database.data import RotiDatabase
 from discord.ext import commands
 from discord import app_commands
@@ -163,6 +165,8 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         self.cooldown = 5 # 5 second cooldown for AI responses to not be rate limited.
         self.last_response = 0
         self.db = RotiDatabase()
+        # Temporary for testing purposes.
+        self.bloom_filters : dict = {} 
     
     # This function is used to match words inside of a message to check if a talkback trigger is present.
     def _match_talkback(self, trigger : str, msg : str, strict : bool) -> str:
@@ -309,6 +313,38 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         view.message = await interaction.original_response() #If I needed it in the button class
 
         await view.wait()
+    
+    @single_run
+    async def initialize_bloom_filters(self):
+        """
+        Creates a bloom filter on the talkback triggers in the database.
+        This function will only initialize bloom filters on servers that do not 
+        have them by searching the db if they have a bloom filter instance.\n
+
+        If there is already data for talkbacks for that server, then the bloom filter
+        will take that into account, though this is an expensive process at start up.
+        """
+        guild_ids = [guild.id for guild in self.bot.guilds]
+
+        def sha256_hash(s : str) -> int:
+            return int.from_bytes(hashlib.sha256(string=s.encode()).digest())
+        
+
+        for guild_id in guild_ids:
+            triggers = self.db[guild_id, "trigger_phrases"].unwrap()
+            bloom_filter = BloomFilter[str](
+                bits=40_000,
+                hash_func=sha256_hash,
+                hash_digest_size=256 // 8,
+                num_hashes=5,
+                bytes_per_hash=6
+            ) # 5K bloom filter.
+
+            for trigger_set in triggers:
+                for trigger in trigger_set:
+                    bloom_filter.add(trigger)
+        
+            self.bloom_filters[guild_id] = bloom_filter
 
 #States for the button.
 class ButtonState(enum.Enum):
@@ -477,4 +513,6 @@ class TalkbackResView(discord.ui.View):
             pass  # If it was already deleted
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(Talkback(bot))
+    cog = Talkback(bot)
+    await cog.initialize_bloom_filters()
+    await bot.add_cog(cog)

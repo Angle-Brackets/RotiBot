@@ -5,7 +5,6 @@ import discord
 import aiohttp
 import os
 import wavelink
-import argparse
 import logging
 import inspect
 import importlib
@@ -23,18 +22,13 @@ load_dotenv(".env")
 class Roti(commands.Bot):
     def __init__(self):
         setup_logging(config_file="utils/logging_config.json")
-        logging.basicConfig(level="INFO")
         self.logger = logging.getLogger(__name__)
-        self.parser = argparse.ArgumentParser() # Flags to enable/disable features during testing
-        self._setup_cli_args()
-
-        self.test_build = bool(self.args.test)
         self.state = RotiState()
         self.db = RotiDatabase()
+        
         super().__init__(
             command_prefix = "$",
-            intents = discord.Intents.all(),
-            application_id = self.state.credentials.application_id if not self.test_build else self.state.credentials.test_application_id
+            intents = discord.Intents.all()
         )
 
     async def on_ready(self):
@@ -46,7 +40,7 @@ class Roti(commands.Bot):
         await self._load_cogs()
 
         # Music bot setup
-        if not self.args.nomusic:
+        if self.state.args.music:
             await self._setup_music_functionality()
         else:
             self.logger.info("Music Functionality is Disabled!")
@@ -54,7 +48,7 @@ class Roti(commands.Bot):
         await roti.tree.sync()
     
     async def _load_cogs(self):
-        show_output : bool = self.args.show_cog_load
+        show_output : bool = self.state.args.show_cog_load
         for root, _, files in os.walk("./cogs"):
             for file in files:
                 if file.endswith(".py"):
@@ -84,12 +78,6 @@ class Roti(commands.Bot):
     async def _setup_music_functionality(self):
         nodes = [wavelink.Node(uri=fr"http://{self.state.credentials.music_ip}:2333", password=self.state.credentials.music_pass)]
         await wavelink.Pool.connect(nodes=nodes, client=self, cache_capacity=100)
-    
-    def _setup_cli_args(self):
-        self.parser.add_argument("--nomusic", action=argparse.BooleanOptionalAction, help="Disable Music Functionality")
-        self.parser.add_argument("--test", action=argparse.BooleanOptionalAction, help="Enable testing mode")
-        self.parser.add_argument("--show-cog-load", "-scl", action=argparse.BooleanOptionalAction, help="Show what cogs are loaded during startup.")
-        self.args = self.parser.parse_args()
         
     async def close(self):
         await super().close()
@@ -122,4 +110,4 @@ class Roti(commands.Bot):
                 self.logger.critical("Deleted guild %s's data.", guild.name)
 
 roti = Roti()
-roti.run(roti.state.credentials.token if not roti.test_build else roti.state.credentials.test_token)
+roti.run(roti.state.credentials.token if not roti.state.args.test else roti.state.credentials.test_token)

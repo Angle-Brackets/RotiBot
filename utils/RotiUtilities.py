@@ -32,6 +32,8 @@ LOG_RECORD_BUILTIN_ATTRS = {
     "taskName",
 }
 
+TEST_GUILD = 844707618102444113
+
 def cog_command(cls):
     """
     This is a decorator to identify a class as a cog, if this decorator is not used, then the 
@@ -65,6 +67,8 @@ def setup_logging(*, config_file : str):
     if queue_handler:
         queue_handler.listener.start()
         atexit.register(queue_handler.listener.stop)
+    
+    logging.basicConfig(level="INFO")
 
 # Credit to https://github.com/mCodingLLC/VideosSampleCode/blob/master/videos/135_modern_logging/mylogger.py
 class LogJSONFormatter(logging.Formatter):

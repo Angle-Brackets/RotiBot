@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional, Tuple, Unpack
 from returns.result import Result, Success, Failure
 from returns.maybe import Maybe, Some, Nothing
 from database.bot_state import RotiState
+from utils.RotiUtilities import TEST_GUILD
 from concurrent.futures import Future
 import logging
 import asyncio
@@ -106,9 +107,11 @@ class RotiDatabase(metaclass=Singleton):
         """
         # Update the in-memory database immediately
         self._set_nested(keys, value)
-
         future = Future()
-        self._loop.call_soon_threadsafe(self._requests.put_nowait, (keys, value, future))
+
+        # In testing modes, we don't want to actually perform any database changes unless its in the test guild.
+        if not self.state.args.test or keys[0] == TEST_GUILD:
+            self._loop.call_soon_threadsafe(self._requests.put_nowait, (keys, value, future))
         return future
     
     async def shutdown(self):

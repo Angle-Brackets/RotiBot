@@ -1,7 +1,9 @@
 import os
 import time
+import argparse
 from utils.Singleton import Singleton
 from dotenv import load_dotenv
+from dataclasses import dataclass, field
 
 class RotiState(metaclass=Singleton):
     """
@@ -10,8 +12,22 @@ class RotiState(metaclass=Singleton):
     """
     start_time = time.time()
     def __init__(self):
+        self._setup_cli_args()
         self.__dict__["credentials"] = BotCredentials()
     
+    def _setup_cli_args(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--music", action=argparse.BooleanOptionalAction, help="Toggle Music Functionality")
+        parser.add_argument("--test", action=argparse.BooleanOptionalAction, help="Toggle testing mode")
+        parser.add_argument("--show-cog-load", "-scl", action=argparse.BooleanOptionalAction, help="Show what cogs are loaded during startup.")
+        args = parser.parse_args()
+
+        self.__dict__["args"] = RotiArguments(
+            music=args.music,
+            test=args.test,
+            show_cog_load=args.show_cog_load
+        )
+        
     @classmethod
     def calculate_uptime(cls) -> str:
         total_seconds = int(time.time() - cls.start_time)
@@ -28,7 +44,7 @@ class RotiState(metaclass=Singleton):
 
 class BotCredentials(metaclass=Singleton):
     def __init__(self):
-        load_dotenv(".env") # Load credentials
+        load_dotenv(".env", override=True) # Load credentials
         self.__dict__["database_url"] = os.getenv("DATABASE")
         self.__dict__["token"] = os.getenv("TOKEN")
         self.__dict__["test_token"] = os.getenv("TEST_TOKEN")
@@ -42,3 +58,12 @@ class BotCredentials(metaclass=Singleton):
     def __setattr__(self, key, value):
         """ Prevents modification of attributes after initialization. """
         raise AttributeError(f"Cannot modify read-only attribute '{key}'")
+
+@dataclass(frozen=True, kw_only=True)
+class RotiArguments:
+    """
+    Data class that contains the command line arguments passed into Roti at initialization
+    """
+    music : bool = field(default=True)
+    test : bool = field(default=False)
+    show_cog_load : bool = field(default=False)
