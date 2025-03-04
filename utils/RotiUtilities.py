@@ -67,8 +67,6 @@ def setup_logging(*, config_file : str):
     if queue_handler:
         queue_handler.listener.start()
         atexit.register(queue_handler.listener.stop)
-    
-    logging.basicConfig(level="INFO")
 
 # Credit to https://github.com/mCodingLLC/VideosSampleCode/blob/master/videos/135_modern_logging/mylogger.py
 class LogJSONFormatter(logging.Formatter):

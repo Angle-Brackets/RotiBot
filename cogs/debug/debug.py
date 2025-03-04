@@ -4,9 +4,9 @@ import json
 
 from discord.ext import commands
 from discord import app_commands
-from discord.app_commands import checks
 from datetime import datetime, timezone
 from utils.RotiUtilities import cog_command
+from cogs.statistics.statistics_helpers import pretty_print_statistics
 
 # These commands don't have help pages because they are merely debug commands and aren't for normal use.
 @cog_command
@@ -126,7 +126,6 @@ class Debug(commands.Cog):
         response_time = datetime.now(tz=timezone.utc)
         latency = (response_time - interaction_creation_time).total_seconds()
         await interaction.response.send_message(f'Pong! ({round(latency * 1000)}ms)', delete_after=5)
-    
 
 async def setup(bot : commands.Bot):
     await bot.add_cog(Debug(bot))

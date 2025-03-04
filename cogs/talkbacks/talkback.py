@@ -10,6 +10,7 @@ import asyncio
 import logging
 import hashlib
 
+from cogs.statistics.statistics_helpers import statistic
 from utils.BloomFilter import BloomFilter
 from utils.RotiUtilities import cog_command, single_run
 from database.data import RotiDatabase
@@ -176,6 +177,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
             return len(re.findall('\\b' + trigger + '\\b', msg.casefold(), flags=re.IGNORECASE)) > 0
         return trigger in msg
     
+    @statistic("Standard Talkbacks")
     def _generate_talkback(self, message : discord.Message) -> Maybe[str]:
         if self.bot.user in message.mentions:
             return Nothing # If the message mentions the bot directly, all talkbacks are bypassed and it goes straight to the AI.
@@ -202,6 +204,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
                     return Some(random.choice(responses[i]))
         return Nothing # No talkback was found
 
+    @statistic("AI Talkbacks")
     async def _generate_ai_talkback(self, message : discord.Message) -> Result[str, TalkbackError]:
         serverID = message.guild.id 
         probability = self.db[serverID, "settings", "talkback", "ai_probability"].unwrap() / 100
@@ -242,7 +245,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         )
 
         if not response:
-            return Failure(TalkbackError()) # If any error occurs with the response.
+            return Failure(TalkbackError(None)) # If any error occurs with the response.
 
         return Success(response)
 
