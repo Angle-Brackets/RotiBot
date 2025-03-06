@@ -28,6 +28,7 @@ class TalkbackError(Exception):
         self.reason = reason
 
 #Adds new talkbacks, also automerges talkbacks if a duplicate trigger is given.
+@statistic(display_name="Adding Talkbacks", category="Talkbacks")
 def _add_talkback_phrase(serverID : int, db : RotiDatabase, trigger_phrases : str, response_phrases : str, logger : Optional[logging.Logger]):
         try:
             res = ""
@@ -177,11 +178,8 @@ class Talkback(commands.GroupCog, group_name="talkback"):
             return len(re.findall('\\b' + trigger + '\\b', msg.casefold(), flags=re.IGNORECASE)) > 0
         return trigger in msg
     
-    @statistic("Standard Talkbacks")
+    @statistic("Standard Talkbacks", category="Talkbacks")
     def _generate_talkback(self, message : discord.Message) -> Maybe[str]:
-        if self.bot.user in message.mentions:
-            return Nothing # If the message mentions the bot directly, all talkbacks are bypassed and it goes straight to the AI.
-        
         msg = message.content.casefold()
         serverID = message.guild.id
         
@@ -189,13 +187,8 @@ class Talkback(commands.GroupCog, group_name="talkback"):
             return Nothing
 
         strict = self.db[serverID, "settings", "talkback", "strict"].unwrap()
-        probability = self.db[serverID, "settings", "talkback", "res_probability"].unwrap() / 100
         trigger_phrases = self.db[serverID, "trigger_phrases"].unwrap()
         responses = self.db[serverID, "response_phrases"].unwrap()
-        rand = random.random()
-
-        if probability < rand:
-            return Nothing
 
         # Index here is used for responses since they're parallel arrays to each other.
         for i, triggers in enumerate(trigger_phrases):
@@ -204,50 +197,45 @@ class Talkback(commands.GroupCog, group_name="talkback"):
                     return Some(random.choice(responses[i]))
         return Nothing # No talkback was found
 
-    @statistic("AI Talkbacks")
+    @statistic("AI Talkbacks", category="Talkbacks")
     async def _generate_ai_talkback(self, message : discord.Message) -> Result[str, TalkbackError]:
-        serverID = message.guild.id 
-        probability = self.db[serverID, "settings", "talkback", "ai_probability"].unwrap() / 100
-        channel : discord.TextChannel = message.channel
-        time_since_last = time.time() - self.last_response
+        async with message.channel.typing():
+            channel : discord.TextChannel = message.channel
+            time_since_last = time.time() - self.last_response
 
-        # Enforce a sleep to not overload the API
-        if time_since_last < self.cooldown:
-            self.logger.info(f"AI Response requested too quickly for {message.guild.name}. Sleeping for {self.cooldown - time_since_last:.2f} seconds...")
-            time.sleep(self.cooldown - time_since_last)
+            # Enforce a sleep to not overload the API
+            if time_since_last < self.cooldown:
+                self.logger.info(f"AI Response requested too quickly for {message.guild.name}. Sleeping for {self.cooldown - time_since_last:.2f} seconds...")
+                time.sleep(self.cooldown - time_since_last)
 
-        # If the bot isn't mentioned and the probability isn't reached, no response.
-        if probability <= 0 or (self.bot.user not in message.mentions and random.random() >= probability):
-            return Failure(TalkbackError)
+            self.last_response = time.time()
+            chat_history = "No chat history"
 
-        self.last_response = time.time()
-        chat_history = "No chat history"
+            history : typing.List[discord.Message] = [msg async for msg in channel.history(limit=10)]
+            formatted_messages = []
+            # Format for the messages, this is important for the prompt!
+            msg_format = "THE CONTEXT FOLLOWS THE FORMAT [MSG START] USERNAME: MESSAGE_CONTENTS [MSG END] WITH EACH MESSAGE BLOCK RELATING TO ONE USER'S MESSAGE. THE MOST RECENT MESSAGE IS AT THE BOTTOM."
 
-        history : typing.List[discord.Message] = [msg async for msg in channel.history(limit=10)]
-        formatted_messages = []
-        # Format for the messages, this is important for the prompt!
-        msg_format = "THE CONTEXT FOLLOWS THE FORMAT [MSG START] USERNAME: MESSAGE_CONTENTS [MSG END] WITH EACH MESSAGE BLOCK RELATING TO ONE USER'S MESSAGE. THE MOST RECENT MESSAGE IS AT THE BOTTOM."
-
-        for msg in reversed(history):
-            username = msg.author.display_name
-            content = msg.content or "[NO CONTENT]" # Should always have content.
-            formatted_messages.append(
-                f"[MSG START] {username}: {content} [MSG END]"
+            for msg in reversed(history):
+                username = msg.author.display_name
+                content = msg.content or "[NO CONTENT]" # Should always have content.
+                formatted_messages.append(
+                    f"[MSG START] {username}: {content} [MSG END]"
+                )
+            
+            chat_history = "\n".join(formatted_messages)
+            response = await asyncio.to_thread(
+                self.brain.generate_ai_response, 
+                f"{message.author.display_name} said {message.content} to you! You should respond with the current chat context provided with a similar tone to what this person said to you!", 
+                chat_history, 
+                msg_format, 
+                "llama"
             )
-        
-        chat_history = "\n".join(formatted_messages)
-        response = await asyncio.to_thread(
-            self.brain.generate_ai_response, 
-            f"{message.author.display_name} said {message.content} to you! You should respond with the current chat context provided with a similar tone to what this person said to you!", 
-            chat_history, 
-            msg_format, 
-            "llama"
-        )
 
-        if not response:
-            return Failure(TalkbackError(None)) # If any error occurs with the response.
+            if not response:
+                return Failure(TalkbackError(None)) # If any error occurs with the response.
 
-        return Success(response)
+            return Success(response)
 
     @commands.Cog.listener()
     async def on_message(self, message : discord.Message):
@@ -257,30 +245,37 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         serverID = message.guild.id
         delete_duration = self.db[serverID, "settings", "talkback", "duration"].unwrap()
         view = TalkbackResView(serverID, message.author)
-
-        match self._generate_talkback(message):
-            case Some(response) if delete_duration:
-                await message.channel.send(response, view=view, delete_after=delete_duration)
-                return
-            case Some(response):
-                await message.channel.send(response, view=view)
-                return
-            case Maybe.empty:
-                pass # No talkback was fired.
         
-        # Try an AI message, the probability of this happening is related to the talkback probability as well.
-        match await self._generate_ai_talkback(message):
-            case Success(response) if delete_duration:
-                await message.channel.typing()
-                await message.channel.send(response, view=view, delete_after=delete_duration)
-            case Success(response):
-                await message.channel.typing()
-                await message.channel.send(response, view=view)
-            case Failure(TalkbackError() as error) if error.reason:
-                await message.channel.send(error, view=view, delete_after=5)
-            case Failure(_):
-                pass
+        was_mentioned = self.bot.user in message.mentions
+        talkback_probability = self.db[serverID, "settings", "talkback", "res_probability"].unwrap() / 100
+        ai_probability = self.db[serverID, "settings", "talkback", "ai_probability"].unwrap() / 100
+        probability_roll = random.uniform(0.0, 1.0)
 
+        # Talkbacks are not attempted if Roti is mentioned.
+        if not was_mentioned and probability_roll < talkback_probability:
+            match self._generate_talkback(message):
+                case Some(response) if delete_duration:
+                    print("1")
+                    await message.channel.send(response, view=view, delete_after=delete_duration)
+                    return
+                case Some(response):
+                    print("2")
+                    await message.channel.send(response, view=view)
+                    return
+                case Maybe.empty:
+                    return
+        # Try an AI message, the probability of this happening is related to the talkback probability as well.
+        elif was_mentioned or probability_roll < ai_probability:
+            match await self._generate_ai_talkback(message):
+                case Success(response) if delete_duration:
+                    await message.channel.send(response, view=view, delete_after=delete_duration)
+                case Success(response):
+                    await message.channel.send(response, view=view)
+                case Failure(TalkbackError() as error) if error.reason:
+                    await message.channel.send(error, view=view, delete_after=5)
+                case Failure(_):
+                    pass
+    
     @app_commands.command(name="add", description="Add a new talkback pair. Spaces separate elements, use quotes to group phrases.")
     async def _talkback_add(self, interaction : discord.Interaction, triggers : str, responses : str):
         await interaction.response.defer()

@@ -2,6 +2,7 @@ import requests
 import random
 import logging
 
+from cogs.statistics.statistics_helpers import statistic
 from typing import Dict, List, Optional
 from io import BytesIO
 from PIL import Image
@@ -34,6 +35,7 @@ class RotiBrain:
         self.logger = logging.getLogger(__name__)
 
     # Generates an image with a given query.
+    @statistic(display_name="Generate Image", category="Generate")
     def generate_image(self, prompt, style) -> BytesIO:
         seed = random.randint(0, 10*100)
         model = f"Flux-{style}" if style else "Flux"
@@ -58,16 +60,17 @@ class RotiBrain:
 
     
  
-    """
-    Generates an AI text response given the prompt and model.
-    This function also takes in the context that you wish to give the bot for it to have a more intelligent response.
-
-    The response is a dictionary with one field called "response", but there's a failsafe 
-    to print a string if that's not the format.
-
-    Generally, openai is censored and llama is uncensored.
-    """
+    @statistic(display_name="Generate Text", category="Generate")
     def generate_ai_response(self, prompt : str, context : Optional[str], context_format : Optional[str], model = "openai") -> str | None:
+        """
+        Generates an AI text response given the prompt and model.
+        This function also takes in the context that you wish to give the bot for it to have a more intelligent response.
+
+        The response is a dictionary with one field called "response", but there's a failsafe 
+        to print a string if that's not the format.
+
+        Generally, openai is censored and llama is uncensored.
+        """
         url = r"https://text.pollinations.ai/"
         payload = {
             "messages" : [

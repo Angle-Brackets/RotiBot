@@ -8,7 +8,6 @@ from cogs.generate.RotiBrain import RotiBrain
 from discord.ext import commands
 from discord import app_commands
 
-from enum import Enum
 from typing import Optional, List
 from utils.RotiUtilities import cog_command
 

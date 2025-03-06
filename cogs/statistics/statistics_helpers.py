@@ -1,54 +1,83 @@
 import time
 import functools
+import asyncio
 from collections import defaultdict
 from typing import Callable, Optional, List
 from dataclasses import dataclass, field
 from database.data import RotiDatabase
 
-@dataclass(frozen=True)
-class FunctionName:
+@dataclass(kw_only=True, frozen=True)
+class FunctionInfo:
     display_name : str
     qualified_name : str
+    category : str = field(default=None)
+
+UNDEFINED_FUNCTION = FunctionInfo(
+    display_name="UNDEFINED",
+    qualified_name="UNDEFINED"
+)
 
 @dataclass(order=True)
 class FunctionStatistics:
+    function_info : FunctionInfo = field(default=UNDEFINED_FUNCTION)
     shortest_exec_time : float = field(default=float("inf"))
     longest_exec_time : float = field(default=float("-inf"))
     average_exec_time : float = field(default=0.0)
     times_invoked : int = field(default=0)
 
-_statistics : dict[FunctionName, FunctionStatistics] = defaultdict(FunctionStatistics)
+_statistics : dict[str, FunctionStatistics] = defaultdict(FunctionStatistics)
 
-def statistic(display_name: Optional[str] = None):
+def statistic(display_name: Optional[str] = None, category : Optional[str] = None):
     """
     This decorator can be used on any function to measure its performance with some metrics.
+    Works with both synchronous functions and coroutines.
     """
     def decorator(func: Callable):
-        func_name = func.__name__
-        
-        if display_name:
-            _statistics[func_name].display_name = display_name
-        else:
-            _statistics[func_name].display_name = func_name
+        _statistics[func.__name__].function_info = FunctionInfo(
+            display_name=display_name if display_name else func.__name__,
+            qualified_name=func.__name__,
+            category=category
+        )
 
-        def wrapper(*args, **kwargs):
-            start_time = time.perf_counter()
-            result = func(*args, **kwargs)
-            end_time = time.perf_counter()
+        if asyncio.iscoroutinefunction(func):
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                start_time = time.perf_counter()
+                result = await func(*args, **kwargs)
+                end_time = time.perf_counter()
+                
+                exec_time = end_time - start_time
+                stats = _statistics[func.__name__]
+
+                stats.times_invoked += 1
+                stats.shortest_exec_time = min(stats.shortest_exec_time, exec_time)
+                stats.longest_exec_time = max(stats.longest_exec_time, exec_time)
+                stats.average_exec_time = (
+                    (stats.average_exec_time * (stats.times_invoked - 1)) + exec_time
+                ) / stats.times_invoked
+                return result
             
-            exec_time = end_time - start_time
-            stats = _statistics[func_name]
+            return async_wrapper
+        else:
+            @functools.wraps(func)
+            def sync_wrapper(*args, **kwargs):
+                start_time = time.perf_counter()
+                result = func(*args, **kwargs)
+                end_time = time.perf_counter()
+                
+                exec_time = end_time - start_time
+                stats = _statistics[func.__name__]
 
-            stats.times_invoked += 1
-            stats.shortest_exec_time = min(stats.shortest_exec_time, exec_time)
-            stats.longest_exec_time = max(stats.longest_exec_time, exec_time)
-            stats.average_exec_time = (
-                (stats.average_exec_time * (stats.times_invoked - 1)) + exec_time
-            ) / stats.times_invoked
-
-            return result
-
-        return wrapper
+                stats.times_invoked += 1
+                stats.shortest_exec_time = min(stats.shortest_exec_time, exec_time)
+                stats.longest_exec_time = max(stats.longest_exec_time, exec_time)
+                stats.average_exec_time = (
+                    (stats.average_exec_time * (stats.times_invoked - 1)) + exec_time
+                ) / stats.times_invoked
+                return result
+            
+            return sync_wrapper
+    
     return decorator
 
 def ttl_cache(ttl: int):
@@ -70,7 +99,6 @@ def ttl_cache(ttl: int):
             if cache_key in cache:
                 cached_value, timestamp = cache[cache_key]
                 if current_time - timestamp <= ttl:
-                    print("CACHE HIT!")
                     return cached_value
 
             # Otherwise, compute the result and cache it
@@ -81,21 +109,8 @@ def ttl_cache(ttl: int):
         return wrapper
     return decorator
 
-
-def pretty_print_statistics() -> str:
-    if not _statistics.values():
-        return "No statistics recorded!"
-    
-    output = []
-    for func_name, stats in _statistics.items():
-        display_name = stats.display_name if stats.display_name else func_name
-        output.append(f"Function: {display_name}")
-        output.append(f"  Shortest Execution Time: {stats.shortest_exec_time:.6f} seconds")
-        output.append(f"  Longest Execution Time: {stats.longest_exec_time:.6f} seconds")
-        output.append(f"  Average Execution Time: {stats.average_exec_time:.6f} seconds")
-        output.append(f"  Times Invoked: {stats.times_invoked}")
-        output.append("-" * 40)
-    return "\n".join(output)
+def get_statistics():
+    return _statistics
 
 def pretty_print_usage_statistics(db : RotiDatabase, guild_ids : List[int]) -> str:
     return \

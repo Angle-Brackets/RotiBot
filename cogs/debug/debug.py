@@ -6,7 +6,6 @@ from discord.ext import commands
 from discord import app_commands
 from datetime import datetime, timezone
 from utils.RotiUtilities import cog_command
-from cogs.statistics.statistics_helpers import pretty_print_statistics
 
 # These commands don't have help pages because they are merely debug commands and aren't for normal use.
 @cog_command

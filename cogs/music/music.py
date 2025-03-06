@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from database.data import RotiDatabase
 from time import strftime, gmtime
 from utils.RotiUtilities import cog_command
+from cogs.statistics.statistics_helpers import statistic
 
 """
 Some notes about music functionality:
@@ -199,8 +200,8 @@ class Music(commands.Cog):
         elif vc.home != interaction.channel:
             await interaction.followup.send(f"You can only play songs in {vc.home.mention}, as the player has already started there.", ephemeral=True)
             return
-
-        tracks : wavelink.Search = await wavelink.Playable.search(query)
+        
+        tracks : wavelink.Search = await self._get_tracks(query)
 
         if not tracks:
             await interaction.followup.send("Failed to search for given video. Try with another query!", ephemeral=True)
@@ -367,6 +368,10 @@ class Music(commands.Cog):
                 await _update_voice_parameters(self.db, self.filters, interaction, vc)
                 await interaction.followup.send(f"Now playing at {round(pitch * 100)}% pitch.")
                 return
+    
+    @statistic(display_name="Music Querying", category="Music")
+    async def _get_tracks(self, query : str) -> wavelink.Search:
+        return await wavelink.Playable.search(query)
 
     # @app_commands.command(name="filter", description="Modify various extraneous aspects of playback.")
     # async def _filter(self, interaction : discord.Interaction, *, filter : typing.Optional[typing.Literal["Tremolo", "Vibrato", "Rotation", "Distortion", "Low Pass"]]):
