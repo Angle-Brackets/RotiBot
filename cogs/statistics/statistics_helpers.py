@@ -1,13 +1,16 @@
 import time
 import functools
 import asyncio
-from collections import defaultdict
-from typing import Callable, Optional, List
+from collections import defaultdict, namedtuple
+from typing import Callable, Optional, List, NamedTuple
 from dataclasses import dataclass, field
 from database.data import RotiDatabase
 
-@dataclass(kw_only=True, frozen=True)
+@dataclass(slots=True, kw_only=True, frozen=True)
 class FunctionInfo:
+    """
+    Information about a tracked function call.
+    """
     display_name : str
     qualified_name : str
     category : str = field(default=None)
@@ -17,8 +20,29 @@ UNDEFINED_FUNCTION = FunctionInfo(
     qualified_name="UNDEFINED"
 )
 
-@dataclass(order=True)
+@dataclass(slots=True, frozen=True, kw_only=True)
+class TalkbackUsage:
+    triggers: int
+    responses : int
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class QuoteUsage:
+    nonreplaceable : int
+    replaceable : int
+
+@dataclass(slots=True, frozen=True, kw_only=True, order=True)
+class RotiUsage:
+    """
+    Class to store information about global usage statistics on Roti
+    """
+    talkback_usage : TalkbackUsage
+    quote_usage : QuoteUsage
+
+@dataclass(slots=True, order=True)
 class FunctionStatistics:
+    """
+    Class to store global performance statistics on Roti
+    """
     function_info : FunctionInfo = field(default=UNDEFINED_FUNCTION)
     shortest_exec_time : float = field(default=float("inf"))
     longest_exec_time : float = field(default=float("-inf"))
@@ -109,27 +133,41 @@ def ttl_cache(ttl: int):
         return wrapper
     return decorator
 
-def get_statistics():
+def get_perf_statistics():
     return _statistics
 
-def pretty_print_usage_statistics(db : RotiDatabase, guild_ids : List[int]) -> str:
-    return \
-    f"""
-    Talkback Statistics: 
-    {calculate_talkback_count(db, guild_ids)}
-    {"-" * 40}
-    """
+def get_usage_statistics(db : RotiDatabase, guild_ids : List[int]) -> RotiUsage:
+    return RotiUsage(
+        talkback_usage=_calculate_talkback_count(db, guild_ids),
+        quote_usage=_calculate_quote_usage(db, guild_ids)
+    )
 
 @ttl_cache(ttl=300)
-def calculate_talkback_count(db : RotiDatabase, guild_ids : List[int]) -> str:
+def _calculate_talkback_count(db: RotiDatabase, guild_ids: List[int]) -> TalkbackUsage:
     """
-    This is a cached function to calculate the number of talkbacks that are present across all servers.
+    This is a cached function to calculate the number of talkbacks present across all servers.
     """
     trigger_count = 0
     response_count = 0
 
     for guild in guild_ids:
-        trigger_count += sum([len(trigger_set) for trigger_set in db[guild, "trigger_phrases"]])
-        response_count += sum([len(response_set) for response_set in db[guild, "response_phrases"]])
+        trigger_count += sum(len(trigger_set) for trigger_set in db[guild, "trigger_phrases"].unwrap())
+        response_count += sum(len(response_set) for response_set in db[guild, "response_phrases"].unwrap())
     
-    return f"There are currently {trigger_count} trigger phrases and {response_count} response phrases registered with me across all servers!"
+    return TalkbackUsage(triggers=trigger_count, responses=response_count)
+
+@ttl_cache(ttl=300)
+def _calculate_quote_usage(db : RotiDatabase, guild_ids : List[int]) -> QuoteUsage:
+    """
+    This is a cached function to calculate the number of quotes present across all servers, organized by type of quote.
+    """
+    nonreplaceable = 0
+    replaceable = 0
+
+    for guild in guild_ids:
+        for quote in db[guild, "quotes"].unwrap():
+            nonreplaceable += int(not quote["replaceable"])
+            replaceable += int(quote["replaceable"])
+    
+    return QuoteUsage(nonreplaceable=nonreplaceable, replaceable=replaceable)
+

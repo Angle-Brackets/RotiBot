@@ -6,7 +6,7 @@ from discord.ext import commands
 from discord import app_commands
 from database.data import RotiDatabase
 from utils.RotiUtilities import cog_command
-from cogs.statistics.statistics_helpers import FunctionStatistics, get_statistics, pretty_print_usage_statistics
+from cogs.statistics.statistics_helpers import FunctionStatistics, RotiUsage, get_perf_statistics, get_usage_statistics
 
 @cog_command
 class Statistics(commands.GroupCog, group_name="statistics"):
@@ -21,16 +21,16 @@ class Statistics(commands.GroupCog, group_name="statistics"):
     
     @app_commands.command(name="usage", description="View the usage statistics for Roti.")
     async def _usage_statistics(self, interaction : discord.Interaction):
-        await interaction.response.send_message(pretty_print_usage_statistics(self.db, [guild.id for guild in self.bot.guilds]), ephemeral=True)
+        await interaction.response.send_message(embed=self._build_usage_embed(), ephemeral=True)
 
     def _build_statistic_embed(self) -> discord.Embed:
         """
         Builds the displayed embed for the statistics, groups by categories.
         """
-        stats : Dict[str, FunctionStatistics] = get_statistics()
+        stats : Dict[str, FunctionStatistics] = get_perf_statistics()
         stats  = sorted(stats.items(), key=lambda item: (item[1].function_info.category is None, item[1].function_info.category))
         embed = discord.Embed(
-            title="Roti Statistics",
+            title="Roti Performance Statistics",
             description="These are some global statistics on how Roti is performing across all the servers it's in. They're mostly for debug purposes, but they're still fun to look at.",
             colour=0xecc98e
         )
@@ -49,6 +49,34 @@ class Statistics(commands.GroupCog, group_name="statistics"):
                     inline=False
                 )
         
+        return embed
+
+    def _build_usage_embed(self) -> discord.Embed:
+        usage_stats : RotiUsage = get_usage_statistics(self.db, [guild.id for guild in self.bot.guilds])
+        embed = discord.Embed(
+            title="Roti Usage Statistics",
+            description="These are some global usage statistics on how much data is stored in Roti across all the servers it's in. They're mostly for debug purposes, but they're still fun to look at.",
+            colour=0xecc98e
+        )
+
+        embed.add_field(
+            name="Talkback Usage",
+            value=\
+            f"""
+            Currently there are {usage_stats.talkback_usage.triggers} trigger phrases and {usage_stats.talkback_usage.responses} response phrases registered!
+            """,
+            inline=False
+        )
+
+        embed.add_field(
+            name="Quote Usage",
+            value=\
+            f"""
+            Currently there are {usage_stats.quote_usage.nonreplaceable} non-replaceable and {usage_stats.quote_usage.replaceable} replaceable quotes registered!
+            """,
+            inline=False
+        )
+
         return embed
 
 async def setup(bot : commands.Bot):
