@@ -10,3 +10,4 @@ application.*
 .DS_Store
 roti/
 *.jar
+migration/

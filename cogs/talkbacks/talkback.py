@@ -202,6 +202,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         async with message.channel.typing():
             channel : discord.TextChannel = message.channel
             time_since_last = time.time() - self.last_response
+            HISTORY_LIMIT = 30
 
             # Enforce a sleep to not overload the API
             if time_since_last < self.cooldown:
@@ -211,7 +212,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
             self.last_response = time.time()
             chat_history = "No chat history"
 
-            history : typing.List[discord.Message] = [msg async for msg in channel.history(limit=10)]
+            history : typing.List[discord.Message] = [msg async for msg in channel.history(limit=HISTORY_LIMIT)]
             formatted_messages = []
             # Format for the messages, this is important for the prompt!
             msg_format = "THE CONTEXT FOLLOWS THE FORMAT [MSG START] USERNAME: MESSAGE_CONTENTS [MSG END] WITH EACH MESSAGE BLOCK RELATING TO ONE USER'S MESSAGE. THE MOST RECENT MESSAGE IS AT THE BOTTOM."
@@ -321,6 +322,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
 
         If there is already data for talkbacks for that server, then the bloom filter
         will take that into account, though this is an expensive process at start up.
+        TODO: THIS IS NOT CURRENTLY USED FOR ANYTHING!
         """
         guild_ids = [guild.id for guild in self.bot.guilds]
 

@@ -298,6 +298,24 @@
       }
     }
   },
+  "Statistic": {
+    "title": "Help for the statistic command",
+    "description": "Displays global statistics on how Roti is functioning or being used.",
+    "command_base": "statistic",
+    "emoji": ":notepad_spiral:",
+    "commands": {
+      "usage": {
+        "description": "View the global usage statistics on Roti.",
+        "usage": "/statistic usage",
+        "arguments": {}
+      },
+      "performance": {
+        "description": "View the global performance statistics on Roti.",
+        "usage": "/statistic performance",
+        "arguments": {}
+      }
+    }
+  },
   "Changelog": {
     "title": "Help for the changelog command",
     "description": "Displays all of the recent updates to Roti!",
