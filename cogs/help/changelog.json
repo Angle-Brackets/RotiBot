@@ -1,9 +1,9 @@
 {
-  "version": "Alpha V1.9.5",
-  "summary": "Talkback Optimizations & AI Stability Fixes",
+  "version": "Alpha V1.9.6",
+  "summary": "Before Beta!",
   "changes": {
-    "Internal Updates": "-Optimized talkback generation for both standard and AI talkbacks to be far more reliable.\n-Optimized code execution with /execute.",
-    "Features": "-Standard and AI talkbacks are way more reliable now.\n-Added a talking indicator to Roti whenever he is about to respond with an AI message.\n-Added a \"Keep\" Button to Roti to now Keep talkbacks to prevent auto-deletion of talkbacks.",
-    "Bugs": "-Patched bug with /settings talkback ai_probability 0 being ignored.\n-Patched bug with JSON response showing with AI talkback.\n-Patched bug with AI responses randomly dropping or failing."
+    "Internal Updates": "-Optimized Database Writes and Reads, though there is a planned migration to SQL soon.\n-Refactoring of entire command structure internally.\nDatabase writes are done asyncronously now.\n-Better logging\n-Optimized lookups for talkbacks planned, added Bloom Filter code for this\n-Roti's State is now in a Singleton object, easier to manage and add to.\n-Added TTL caching for some expensive commands.",
+    "Features": "-Added a new /statistic command to view performance and usage stats for Roti globally.\n-Added a better talking indicator when Roti is responding with an AI message.\n-AI requests are now queued rather than just hard-blocking requests and are handled asyncronously.",
+    "Bugs": "-Fixed AI Schema being outdated due to an update.\n-Talkbacks are generally more reliable and easier to reason.\n-Fixed very old bug where talkbacks could have completely empty response or trigger fields due to auto-merging.\n-I probably forgot multiple bugs I fixed."
   }
 }
