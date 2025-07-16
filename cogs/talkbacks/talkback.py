@@ -256,11 +256,9 @@ class Talkback(commands.GroupCog, group_name="talkback"):
         if not was_mentioned and probability_roll < talkback_probability:
             match self._generate_talkback(message):
                 case Some(response) if delete_duration:
-                    print("1")
                     await message.channel.send(response, view=view, delete_after=delete_duration)
                     return
                 case Some(response):
-                    print("2")
                     await message.channel.send(response, view=view)
                     return
                 case Maybe.empty:
