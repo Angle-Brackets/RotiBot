@@ -1,12 +1,13 @@
 import typing
 import discord
 import random
-import data
+import database.data as data
 import re
 
 from discord import app_commands
 from discord.ext import commands
-from data import db
+from database.data import RotiDatabase
+from utils.RotiUtilities import cog_command
 
 #This is a reference for the quote structure that is stored in the array.
 QUOTE_STRUCTURE = {
@@ -22,12 +23,14 @@ def build_quote(quote_obj : dict):
     if quote_obj["name"] == "None":
         return quote_obj["default"]
     else:
-        return quote_obj["default"] + "\n-{0}".format(quote_obj["name"])
+        return quote_obj["default"] + f"\n-{quote_obj["name"]}"
 
+@cog_command
 class Quote(commands.GroupCog, group_name="quote"):
     def __init__(self, bot : commands.Bot):
         super().__init__()
         self.bot = bot
+        self.db = RotiDatabase()
 
     add_group = app_commands.Group(name="add", description="Creates a new quote")
 
@@ -40,9 +43,10 @@ class Quote(commands.GroupCog, group_name="quote"):
             await interaction.followup.send("Provided tag exceeds max length of 128 characters, shorten it and try again!")
             return
 
-        for quote_obj in db[interaction.guild_id]["quotes"]:
+        quotes = self.db[interaction.guild_id, "quotes"].unwrap()
+        for quote_obj in quotes:
             if quote_obj["tag"] == tag:
-                await interaction.followup.send("Failed to add new quote, duplicate tag detected with quote: {0}!".format(quote_obj["default"] if quote_obj["has_original"] else quote_obj["quote"]))
+                await interaction.followup.send(f"Failed to add new quote, duplicate tag detected with quote: {quote_obj["default"] if quote_obj["has_original"] else quote_obj["quote"]}!")
                 return
 
         new_quote = QUOTE_STRUCTURE.copy()
@@ -53,19 +57,21 @@ class Quote(commands.GroupCog, group_name="quote"):
         new_quote["replaceable"] = False
         new_quote["has_original"] = True #Always true for non-replaceable quotes.
 
-        db[interaction.guild_id]["quotes"].append(new_quote)
-        data.push_data(interaction.guild_id, "quotes")
+        quotes.append(new_quote)
+        self.db[interaction.guild_id, "quotes"] = quotes
         await interaction.followup.send("Successfully added new quote.")
 
     @add_group.command(name="replaceable", description="Creates a new quote that has replaceable portions.")
     async def _quote_add_rep(self, interaction : discord.Interaction):
-        await interaction.response.send_modal(Quote_Modal())
+        await interaction.response.send_modal(Quote_Modal(self.db))
 
     @app_commands.command(name="random", description="Displays a random quote.")
     async def _quote_random(self, interaction : discord.Interaction):
         await interaction.response.defer()
-        if len(db[interaction.guild_id]["quotes"]) > 0:
-            await interaction.followup.send(build_quote(random.choice(list(filter(lambda x : x["has_original"], db[interaction.guild_id]["quotes"])))))
+
+        quotes = self.db[interaction.guild_id, "quotes"].unwrap()
+        if quotes:
+            await interaction.followup.send(build_quote(random.choice(list(filter(lambda x : x["has_original"], quotes)))))
         else:
             await interaction.followup.send("No quotes found! Add a quote using /quote add!")
 
@@ -74,23 +80,24 @@ class Quote(commands.GroupCog, group_name="quote"):
     async def _quote_list(self, interaction : discord.Interaction, query: typing.Optional[str], show_defaultless : typing.Optional[bool]):
         await interaction.response.defer()
 
-        if len(db[interaction.guild_id]["quotes"]) == 0:
+        quotes = self.db[interaction.guild_id, "quotes"].unwrap()
+        if not quotes:
             await interaction.followup.send("No quotes found! Add a quote using /quote add!")
             return
 
         all_embeds = list()
         show_defaultless = show_defaultless if show_defaultless is not None else False
-        quotes = list(filter(lambda x: x["has_original"], db[interaction.guild_id]["quotes"])) if not show_defaultless else db[interaction.guild_id]["quotes"]
-        quotes = quotes if query is None else list(filter(lambda x: query.casefold() in x["quote"].casefold() or query.casefold() in x["default"] if x["default"] != "None" else False or query.casefold() in x["tag"].casefold() or query.casefold() in x["name"].casefold(), db[interaction.guild_id]["quotes"]))
+        quotes = list(filter(lambda x: x["has_original"], quotes)) if not show_defaultless else quotes
+        quotes = quotes if query is None else list(filter(lambda x: query.casefold() in x["quote"].casefold() or query.casefold() in x["default"] if x["default"] != "None" else False or query.casefold() in x["tag"].casefold() or query.casefold() in x["name"].casefold(), quotes))
 
         embed_base = discord.Embed(title=f"List of all Quotes in {interaction.guild.name}", description="Use the buttons below to navigate between pages.", color=0xecc98e)
         split_list = [quotes[x:x + 25] for x in range(0, len(quotes), 25)] #Splits into sections of length 25, as 25 fields are allowed per embed
 
-        if len(quotes) == 0:
+        if not quotes:
             await interaction.followup.send("No quotes found! Try a different query or parameter!", ephemeral=True)
             return
 
-        #Generates all of the embeds tha will display the quotes
+        #Generates all of the embeds that will display the quotes
         count = 1
         current_page = 1
         for arr in split_list:
@@ -104,14 +111,14 @@ class Quote(commands.GroupCog, group_name="quote"):
                     elif show_defaultless:
                         quote_to_display = quote_obj["quote"] #Otherwise will just grab the quote with the replaceable portions if show_defaultless is true
 
-                    quote_sayer = "[{0}]. A Quote by {1}".format(count, quote_obj["name"] if quote_obj[ "name"] != "None" else "???")
-                    new_embed.add_field(name=(quote_sayer if len(quote_sayer) < 128 else quote_sayer[0:125] + "...") + "\nTag: {0} {1}".format(quote_obj["tag"] if len(quote_obj["tag"]) < 128 else quote_obj["tag"][0:125] + "...", "🔓" if quote_obj["replaceable"] else "🔒"),value=quote_to_display[0:147] + "..." if len(quote_to_display) > 150 else quote_to_display,inline=False)
+                    quote_sayer = f"[{count}]. A Quote by {quote_obj["name"] if quote_obj[ "name"] != "None" else "???"}"
+                    new_embed.add_field(name=(quote_sayer if len(quote_sayer) < 128 else quote_sayer[0:125] + "...") + f"\nTag: {quote_obj["tag"] if len(quote_obj["tag"]) < 128 else quote_obj["tag"][0:125] + "..."} {"🔓" if quote_obj["replaceable"] else "🔒"}",value=quote_to_display[0:147] + "..." if len(quote_to_display) > 150 else quote_to_display,inline=False)
                     new_embed.set_footer(text=f"Page {current_page}/{len(split_list)}\nSyntax: 🔒 - Nonreplaceable, 🔓 - Replaceable")
                     count += 1
             all_embeds.append(new_embed)
             current_page += 1
 
-        view = Navigation(len(all_embeds), all_embeds, False)
+        view = Navigation(self.db, len(all_embeds), all_embeds, False)
         view.message = await interaction.followup.send(embed=all_embeds[0], view=view)
         view.message = await interaction.original_response()
 
@@ -122,18 +129,19 @@ class Quote(commands.GroupCog, group_name="quote"):
     async def _quote_remove(self, interaction : discord.Interaction, query : typing.Optional[str]):
         await interaction.response.defer()
 
-        if len(db[interaction.guild_id]["quotes"]) == 0:
+        quotes = self.db[interaction.guild_id, "quotes"].unwrap()
+        if not quotes:
             await interaction.followup.send("No quotes found! Add a quote using /quote add!")
             return
 
         all_embeds = list()
         query = query.casefold() if query is not None else ""
-        quotes = list(filter(lambda x : query in x["default"].casefold() or query in x["name"].casefold() or query in x["tag"].casefold() if x["has_original"] else x["quote"].casefold() or query in x["name"].casefold() or query in x["tag"].casefold(), db[interaction.guild_id]["quotes"])) #Gets every quote
+        quotes = list(filter(lambda x : query in x["default"].casefold() or query in x["name"].casefold() or query in x["tag"].casefold() if x["has_original"] else x["quote"].casefold() or query in x["name"].casefold() or query in x["tag"].casefold(), quotes)) #Gets every quote
         embed_base = discord.Embed(title=f"List of all quotes found in {interaction.guild.name}" if query == "" else f"List of all quotes found with keyword {query} in {interaction.guild.name}", description="Use the buttons below to navigate between pages.", color=0xecc98e)
         split_list = [quotes[x:x + 25] for x in range(0, len(quotes), 25)] #Splits into sections of length 25, as 25 fields are allowed per embed
 
         #Nothing matched the query
-        if len(quotes) == 0:
+        if not quotes:
             await interaction.followup.send(f"No matches found with query: {query}.")
             return
 
@@ -145,14 +153,14 @@ class Quote(commands.GroupCog, group_name="quote"):
             for quote_obj in arr:
                 quote_to_display = quote_obj["default"] if quote_obj["has_original"] else quote_obj["quote"]
                 # If show_defaultless is true, then this always runs basically.
-                quote_sayer = "[{0}]. A Quote by {1}".format(count, quote_obj["name"] if quote_obj["name"] != "None" else "???")
-                new_embed.add_field(name=(quote_sayer if len(quote_sayer) < 128 else quote_sayer[0:125] + "...") + "\nTag: {0}".format(quote_obj["tag"] if len(quote_obj["tag"]) < 128 else quote_obj["tag"][0:125] + "..."), value=quote_to_display[0:147] + "..." if len(quote_to_display) > 150 else quote_to_display, inline=False)
+                quote_sayer = f"[{count}]. A Quote by {quote_obj["name"] if quote_obj["name"] != "None" else "???"}"
+                new_embed.add_field(name=(quote_sayer if len(quote_sayer) < 128 else quote_sayer[0:125] + "...") + f"\nTag: {quote_obj["tag"] if len(quote_obj["tag"]) < 128 else quote_obj["tag"][0:125] + "..."}", value=quote_to_display[0:147] + "..." if len(quote_to_display) > 150 else quote_to_display, inline=False)
                 new_embed.set_footer(text=f"Page {current_page}/{len(split_list)}")
                 count += 1
             all_embeds.append(new_embed)
             current_page += 1
 
-        view = Navigation(len(all_embeds), all_embeds, True)
+        view = Navigation(self.db, len(all_embeds), all_embeds, True)
         view.message = await interaction.followup.send(embed=all_embeds[0], view=view)
         view.message = await interaction.original_response()
 
@@ -162,7 +170,8 @@ class Quote(commands.GroupCog, group_name="quote"):
     @app_commands.command(name="say", description="Say a specific quote")
     async def _say(self, interaction : discord.Interaction, tag: str, type : typing.Literal["Replaceable", "Nonreplaceable"]):
         quote = None
-        for q in db[interaction.guild_id]["quotes"]:
+        quotes = self.db[interaction.guild_id, "quotes"].unwrap()
+        for q in quotes:
             if q["tag"].casefold() == tag:
                 quote = q
                 break
@@ -194,12 +203,13 @@ class Quote(commands.GroupCog, group_name="quote"):
         # Only includes first 25 to avoid a crash
         # TODO: Might add an autocomplete for the type field, using interaction.namespace.tag to get the current typed tag.
         return [app_commands.Choice(name=quote["tag"], value=quote["tag"]) for quote in
-                db[interaction.guild_id]["quotes"] if current.casefold() in quote["tag"].casefold()][0:25]
+                self.db[interaction.guild_id, "quotes"].unwrap() if current.casefold() in quote["tag"].casefold()][0:25]
 
 class Quote_Modal(discord.ui.Modal, title = "Make a new Replaceable Quote!"):
-    def __init__(self):
+    def __init__(self, db : RotiDatabase):
         super().__init__()
         self.timeout = 60
+        self.db = db
 
     quote = discord.ui.TextInput(
         label = "New Quote, add replaceable portions w/ {INT}.",
@@ -234,16 +244,17 @@ class Quote_Modal(discord.ui.Modal, title = "Make a new Replaceable Quote!"):
 
     async def on_submit(self, interaction: discord.Interaction):
         replace_tokens = re.findall("{[0-3]{1}}", self.quote.value)
+        quotes = self.db[interaction.guild_id, "quotes"].unwrap()
         if len(replace_tokens) <= 0:
             await interaction.response.send_message("Failed to add new quote: your quote lacks any replaceable portions! Add a replaceable portion in your quote by inserting {#} anywhere in your quote, where the # is a digit from 0-9. If you do not want any replaceable portions, use /quote add nonreplaceable!")
             return
         if self.default.value.casefold() == "none":
             await interaction.response.send_message("Failed to add new quote: the default field cannot be set to be \"None\", please choose a different default value.")
             return
-
-        for quote_obj in db[interaction.guild_id]["quotes"]:
+        
+        for quote_obj in quotes:
             if quote_obj["tag"] == self.tag.value:
-                await interaction.response.send("Failed to add new quote, duplicate tag detected with quote: {0}!".format(quote_obj["default"] if quote_obj["has_original"] else quote_obj["quote"]))
+                await interaction.response.send(f"Failed to add new quote, duplicate tag detected with quote: {quote_obj["default"] if quote_obj["has_original"] else quote_obj["quote"]}!")
                 return
         else:
             new_quote = QUOTE_STRUCTURE.copy()
@@ -253,8 +264,8 @@ class Quote_Modal(discord.ui.Modal, title = "Make a new Replaceable Quote!"):
             new_quote["replaceable"] = True
             new_quote["has_original"] = True if len(self.default.value) > 0 else False
             new_quote["default"] = self.default.value if new_quote["has_original"] else "None"
-            db[interaction.guild_id]["quotes"].append(new_quote)
-            data.push_data(interaction.guild_id, "quotes")
+            quotes.append(new_quote)
+            self.db[interaction.guild_id, "quotes"] = quotes
             await interaction.response.send_message("Successfully added new quote.")
 
 def _generate_options(current_page, embeds):
@@ -264,9 +275,10 @@ def _generate_options(current_page, embeds):
     return options
 
 class Navigation(discord.ui.View):
-    def __init__(self, pages : int, embeds : list, remove_mode : bool):
+    def __init__(self, db : RotiDatabase, pages : int, embeds : list, remove_mode : bool):
         super().__init__()
         self.timeout = 60
+        self.db = db
         self.pages = pages
         self.current_page = 1  # Subtract 1 for indexing.
         self.embeds = embeds
@@ -316,6 +328,7 @@ class Navigation(discord.ui.View):
         field_quote = None
         index = -1
         regex = re.compile(fr"^\[[{quote_num}]\]\.")
+        quotes = self.db[interaction.guild_id, "quotes"].unwrap()
         for quote_field in self.embeds[self.current_page - 1].fields:
             if regex.match(quote_field.name) is not None:
                 field_quote = quote_field.value[0:147] if len(quote_field.value) >= 150 else quote_field.value
@@ -326,8 +339,8 @@ class Navigation(discord.ui.View):
             await self.message.delete()
 
         #This backs out the index of the quote we would like to remove.
-        for i in range(len(db[interaction.guild_id]["quotes"])):
-            if field_quote in db[interaction.guild_id]["quotes"][i]["quote"] or field_quote in db[interaction.guild_id]["quotes"][i]["default"]:
+        for i in range(len(quotes)):
+            if field_quote in quotes[i]["quote"] or field_quote in quotes[i]["default"]:
                 index = i
                 break
 
@@ -335,10 +348,10 @@ class Navigation(discord.ui.View):
             await interaction.response.send_message(content="Failed to delete quote.")
             await self.message.delete()
         else:
-            quote_to_delete = db[interaction.guild_id]["quotes"][index]
-            del db[interaction.guild_id]["quotes"][index]
-            data.push_data(interaction.guild_id, "quotes")
-            await interaction.response.send_message(content="Successfully deleted the quote: {0}".format(quote_to_delete["default"] if quote_to_delete["has_original"] else quote_to_delete["quote"] + "\n-{0}".format(quote_to_delete["name"] if quote_to_delete["name"] != "None" else "???")))
+            quote_to_delete = quotes[index]
+            del quotes[index]
+            self.db[interaction.guild_id, "quotes"] = quotes
+            await interaction.response.send_message(content=f"Successfully deleted the quote: {quote_to_delete["default"] if quote_to_delete["has_original"] else quote_to_delete["quote"]}\n-{quote_to_delete["name"] if quote_to_delete["name"] != "None" else "???"}")
             await self.message.delete()
         self.stop()
 

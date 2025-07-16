@@ -8,6 +8,7 @@ import wikipediaapi as wiki
 from discord import app_commands
 from discord.ext import commands
 from bs4 import BeautifulSoup
+from utils.RotiUtilities import cog_command
 
 #generates a random page.
 def _generate_random_page():
@@ -16,7 +17,7 @@ def _generate_random_page():
     soup = BeautifulSoup(url.content, "html.parser")
     title = soup.find(class_="firstHeading").text
 
-    image = json.loads(requests.get("https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&prop=pageimages|pageterms&piprop=thumbnail&pithumbsize=600&pilicense=any&titles={0}".format(title)).content)
+    image = json.loads(requests.get(f"https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&prop=pageimages|pageterms&piprop=thumbnail&pithumbsize=600&pilicense=any&titles={title}").content)
     try:
         image = image["query"]["pages"][0]["thumbnail"]["source"] # Trust me this works.
     except:
@@ -29,16 +30,15 @@ def _generate_page(page):
     text = _find_sections(page.sections, text)
 
     image = json.loads(requests.get(
-        "https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&prop=pageimages|pageterms&piprop=thumbnail&pithumbsize=600&pilicense=any&titles={0}".format(
-            page.title.replace(" ", "_"))).content)
+        f"https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&prop=pageimages|pageterms&piprop=thumbnail&pithumbsize=600&pilicense=any&titles={page.title.replace(" ", "_")}").content)
     try:
         image = image["query"]["pages"][0]["thumbnail"]["source"]  # Trust me this works.
     except:
         image = "https://upload.wikimedia.org/wikipedia/en/thumb/8/80/Wikipedia-logo-v2.svg/600px-Wikipedia-logo-v2.svg.png"
 
-    embed = discord.Embed(title=page.title, description=text, color=0xecc98e, url="https://en.wikipedia.org/wiki/{0}".format(page.title.replace(" ", "_")))
+    embed = discord.Embed(title=page.title, description=text, color=0xecc98e, url=f"https://en.wikipedia.org/wiki/{page.title.replace(" ", "_")}")
     embed.set_thumbnail(url=image)
-    embed.add_field(name="Want to read more?", value="[Article](https://en.wikipedia.org/wiki/{0})".format(page.title.replace(" ", "_")))
+    embed.add_field(name="Want to read more?", value=f"[Article](https://en.wikipedia.org/wiki/{page.title.replace(" ", "_")})")
     return embed
 
 #Used to correctly highlight sections of the article, main headings are bolded and subheadings are italicized.
@@ -53,6 +53,7 @@ def _find_sections(sections, text, level = 0):
         _find_sections(s.sections, text, level)
     return text
 
+@cog_command
 class Wikipedia(commands.GroupCog, group_name="wikipedia"):
     def __init__(self, bot : commands.Bot):
         super().__init__()
@@ -77,9 +78,9 @@ class Wikipedia(commands.GroupCog, group_name="wikipedia"):
         text = page.text if len(page.text) < 4000 else page.text[0:4000] + "..."
         text = _find_sections(page.sections, text)
 
-        embed = discord.Embed(title=page.title, description=text, color=0xecc98e,url="https://en.wikipedia.org/wiki/{0}".format(page.title.replace(" ", "_")))
+        embed = discord.Embed(title=page.title, description=text, color=0xecc98e,url=f"https://en.wikipedia.org/wiki/{page.title.replace(" ", "_")}")
         embed.set_thumbnail(url=image)
-        embed.add_field(name="Want to read more?", value="[Article](https://en.wikipedia.org/wiki/{0})".format(page.title.replace(" ", "_")))
+        embed.add_field(name="Want to read more?", value=f"[Article](https://en.wikipedia.org/wiki/{page.title.replace(" ", "_")})")
 
         view = DisambNav()
         view.message = await interaction.followup.send(embed=embed, view=view)

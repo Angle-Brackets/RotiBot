@@ -1,14 +1,14 @@
 import discord
 import pathlib
-import os
+import json
 
-from .motd import choose_motd
 from discord.ext import commands
 from discord import app_commands
-from discord.app_commands import checks
 from datetime import datetime, timezone
+from utils.RotiUtilities import cog_command
 
 # These commands don't have help pages because they are merely debug commands and aren't for normal use.
+@cog_command
 class Debug(commands.Cog):
     def __init__(self, bot : commands.Bot):
         super().__init__()
@@ -18,7 +18,16 @@ class Debug(commands.Cog):
     @commands.is_owner()
     @commands.command(name="shuffle_status", help="DEBUG: Changes the bot's status")
     async def _shuffle_status(self, ctx: commands.Context):
-        await self.bot.change_presence(activity=discord.Activity(name=choose_motd(self.bot.activity.name if self.bot.activity is not None else None), type=1))
+        motd_cog = self.bot.get_cog("Motd")
+
+        if not motd_cog:
+            await ctx.send("MOTD Cog couldn't be found!", ephemeral=True)
+            return
+
+        new_motd = motd_cog.choose_motd(self.bot.activity.name if self.bot.activity else None)
+
+        await ctx.message.delete()
+        await self.bot.change_presence(activity=discord.Activity(name=new_motd, type=discord.ActivityType.playing))
         await ctx.send("Shuffled!", ephemeral=True)
 
     @commands.is_owner()
@@ -58,8 +67,8 @@ class Debug(commands.Cog):
         await ctx.message.delete()
 
     @commands.is_owner()
-    @app_commands.command(name="reload", description="DEBUG: Hot loads all commands")
-    async def _reload(self, interaction : discord.Interaction):
+    @commands.command(name="reload", description="DEBUG: Hot loads all commands")
+    async def _reload(self, ctx: commands.Context):
         reloaded = []
         failed = []
         for extension in list(self.bot.extensions.keys()):
@@ -74,7 +83,40 @@ class Debug(commands.Cog):
                 reloaded.append(extension)
 
         result = f"Successfully Reloaded:\n{"\n".join(reloaded)}\n\nFailed to reload:\n{"\n".join(failed)}"
-        await interaction.response.send_message(result, ephemeral=True)
+        await ctx.send(result, ephemeral=True)
+    
+    @commands.is_owner()
+    @commands.command(name="logs", description="DEBUG: Displays the last N logs")
+    async def _logs(self, ctx: commands.Context, n : int = 5):
+        # Checks if the directory exists, if not, makes it.
+        log_file = pathlib.Path("logs/roti.log.jsonl")
+        n = min(10, max(1, n))
+
+        if not log_file.exists():
+            await ctx.send("Log file not found.", ephemeral=True, delete_after=10)
+            return
+
+        msg = []
+        with open(log_file, "r") as f:
+            # Read last 10 lines 
+            f.seek(0, 2)  # Move cursor to the end of file
+            pos = f.tell()
+            lines = []
+            while pos > 0 and len(lines) < n:
+                pos -= 1
+                f.seek(pos)
+                if f.read(1) == "\n":
+                    line = f.readline().strip()
+                    if line:
+                        lines.append(line)
+
+        # Parse logs and format messages
+        for line in reversed(lines):
+            log = json.loads(line)
+            msg.append(f"[{log['level']}]\n{log['message'][:(1950//n)]}")
+
+        result = f"```{"\n\n".join(msg[::-1])[:1950]}```"
+        await ctx.send(result, ephemeral=True, delete_after=30)
 
     # Misc Debug Commands - Anyone can use.
     @app_commands.command(name="ping", description="DEBUG: Gets the latency of the bot")
@@ -83,7 +125,6 @@ class Debug(commands.Cog):
         response_time = datetime.now(tz=timezone.utc)
         latency = (response_time - interaction_creation_time).total_seconds()
         await interaction.response.send_message(f'Pong! ({round(latency * 1000)}ms)', delete_after=5)
-    
 
 async def setup(bot : commands.Bot):
     await bot.add_cog(Debug(bot))

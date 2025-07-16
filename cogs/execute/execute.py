@@ -4,13 +4,14 @@ import logging
 from returns.result import Result, Success, Failure
 from io import TextIOWrapper, BytesIO
 from typing import List, Optional, Callable
-from utils.ExecutionEngine import RotiExecutionEngine
+from cogs.execute.ExecutionEngine import RotiExecutionEngine
 from discord.ext import commands
 from discord import app_commands
 from pyston.models import Output
 from functools import partial
+from utils.RotiUtilities import cog_command
 
-
+@cog_command
 class Execute(commands.GroupCog, group_name="execute"):
     def __init__(self, bot : commands.bot):
         super().__init__()

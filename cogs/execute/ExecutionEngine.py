@@ -3,6 +3,7 @@ from pyston.models import Output
 from io import TextIOWrapper
 from typing import Set, List, Optional
 from returns.result import Result, Success, Failure
+from cogs.statistics.statistics_helpers import statistic
 
 # Thin wrapper around Exception for Result matching.
 class RotiExecutionError(Exception):
@@ -19,6 +20,7 @@ class RotiExecutionEngine():
         self.runtimes_endpoint = r"https://emkc.org/api/v2/piston/runtimes"
         self._languages : Set[str] = set()
     
+    @statistic(display_name="Code Execution", category="Execute")
     async def execute(self, language : str, file : TextIOWrapper, args : List[str] | None) -> Output:
         output = await self._client.execute(
             language=language,
