@@ -1,9 +1,0 @@
-{
-  "version": "Alpha V1.9.5",
-  "summary": "Talkback Optimizations & AI Stability Fixes",
-  "changes": {
-    "Internal Updates": "-Optimized talkback generation for both standard and AI talkbacks to be far more reliable.\n-Optimized code execution with /execute.",
-    "Features": "-Standard and AI talkbacks are way more reliable now.\n-Added a talking indicator to Roti whenever he is about to respond with an AI message.\n-Added a \"Keep\" Button to Roti to now Keep talkbacks to prevent auto-deletion of talkbacks.",
-    "Bugs": "-Patched bug with /settings talkback ai_probability 0 being ignored.\n-Patched bug with JSON response showing with AI talkback.\n-Patched bug with AI responses randomly dropping or failing."
-  }
-}

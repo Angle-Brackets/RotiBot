@@ -1,4 +1,4 @@
-# Roti V1.9.5 Alpha
+# Roti V1.9.6.1 Alpha
 
 A simple general use discord bot written in ``discord.py``.\
 Invite Roti to your server: https://bit.ly/3rNbV72
@@ -12,6 +12,7 @@ Invite Roti to your server: https://bit.ly/3rNbV72
 - /wikipedia for querying wikipedia articles.
 - /generate for generating AI images and text.
 - /execute to execute code!
+- /statistic to see how others use Roti!
 - A bunch of music commands!.
 - /help and /changelog for additional help!
 

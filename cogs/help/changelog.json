@@ -1,9 +1,9 @@
 {
-  "version": "Alpha V1.9.6",
-  "summary": "Before Beta!",
+  "version": "Alpha V1.9.6.1",
+  "summary": "Before Beta! (And bug fixes)",
   "changes": {
-    "Internal Updates": "-Optimized Database Writes and Reads, though there is a planned migration to SQL soon.\n-Refactoring of entire command structure internally.\nDatabase writes are done asyncronously now.\n-Better logging\n-Optimized lookups for talkbacks planned, added Bloom Filter code for this\n-Roti's State is now in a Singleton object, easier to manage and add to.\n-Added TTL caching for some expensive commands.",
-    "Features": "-Added a new /statistic command to view performance and usage stats for Roti globally.\n-Added a better talking indicator when Roti is responding with an AI message.\n-AI requests are now queued rather than just hard-blocking requests and are handled asyncronously.",
-    "Bugs": "-Fixed AI Schema being outdated due to an update.\n-Talkbacks are generally more reliable and easier to reason.\n-Fixed very old bug where talkbacks could have completely empty response or trigger fields due to auto-merging.\n-I probably forgot multiple bugs I fixed."
+    "Internal Updates (1.9.6)": "-Optimized Database Writes and Reads, though there is a planned migration to SQL soon.\n-Refactoring of entire command structure internally.\nDatabase writes are done asyncronously now.\n-Better logging\n-Optimized lookups for talkbacks planned, added Bloom Filter code for this\n-Roti's State is now in a Singleton object, easier to manage and add to.\n-Added TTL caching for some expensive commands.",
+    "Major Features (1.9.6)": "-Added a new /statistic command to view performance and usage stats for Roti globally.\n-Added a better talking indicator when Roti is responding with an AI message.\n-AI requests are now queued rather than just hard-blocking requests and are handled asyncronously.",
+    "Bug Fixes (1.9.6.1)": "-Fixed AI Schema being outdated due to an update.\n-Talkbacks are generally more reliable and easier to reason.\n-Fixed very old bug where talkbacks could have completely empty response or trigger fields due to auto-merging.\n-/statistic usage fixed."
   }
 }
