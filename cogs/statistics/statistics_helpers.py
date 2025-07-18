@@ -1,6 +1,8 @@
 import time
 import functools
 import asyncio
+import discord
+from discord.ext import commands
 from collections import defaultdict, namedtuple
 from typing import Callable, Optional, List, NamedTuple
 from dataclasses import dataclass, field
@@ -29,6 +31,11 @@ class TalkbackUsage:
 class QuoteUsage:
     nonreplaceable : int
     replaceable : int
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class RotiPopulation:
+    servers : int
+    users : int
 
 @dataclass(slots=True, frozen=True, kw_only=True, order=True)
 class RotiUsage:
@@ -142,6 +149,9 @@ def get_usage_statistics(db : RotiDatabase, guild_ids : List[int]) -> RotiUsage:
         quote_usage=_calculate_quote_usage(db, guild_ids)
     )
 
+def get_population(bot : commands.Bot, db : RotiDatabase, guild_ids : List[int]) -> RotiPopulation:
+    return _calculate_population(bot, db, guild_ids)
+
 @ttl_cache(ttl=300)
 def _calculate_talkback_count(db: RotiDatabase, guild_ids: List[int]) -> TalkbackUsage:
     """
@@ -151,8 +161,9 @@ def _calculate_talkback_count(db: RotiDatabase, guild_ids: List[int]) -> Talkbac
     response_count = 0
 
     for guild in guild_ids:
-        trigger_count += sum(len(trigger_set) for trigger_set in db[guild, "trigger_phrases"].unwrap())
-        response_count += sum(len(response_set) for response_set in db[guild, "response_phrases"].unwrap())
+        if guild in db:
+            trigger_count += sum(len(trigger_set) for trigger_set in db[guild, "trigger_phrases"].unwrap())
+            response_count += sum(len(response_set) for response_set in db[guild, "response_phrases"].unwrap())
     
     return TalkbackUsage(triggers=trigger_count, responses=response_count)
 
@@ -165,9 +176,25 @@ def _calculate_quote_usage(db : RotiDatabase, guild_ids : List[int]) -> QuoteUsa
     replaceable = 0
 
     for guild in guild_ids:
-        for quote in db[guild, "quotes"].unwrap():
-            nonreplaceable += int(not quote["replaceable"])
-            replaceable += int(quote["replaceable"])
+        if guild in db:
+            for quote in db[guild, "quotes"].unwrap():
+                nonreplaceable += int(not quote["replaceable"])
+                replaceable += int(quote["replaceable"])
     
     return QuoteUsage(nonreplaceable=nonreplaceable, replaceable=replaceable)
+
+@ttl_cache(ttl=300)
+def _calculate_population(bot : commands.Bot, db : RotiDatabase, guild_ids : List[int]) -> RotiPopulation:
+    """
+    This is a cached function to calculate the total population of servers that use Roti
+    Only counts servers where the db is defined (there are a few legacy "dead" servers that don't follow this trend)
+    """
+    total = 0
+
+    for guild in guild_ids:
+        if guild in db:
+            total += bot.get_guild(guild).member_count
+    
+    return RotiPopulation(servers=len(guild_ids), users=total)
+
 

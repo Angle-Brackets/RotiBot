@@ -6,7 +6,7 @@ from discord.ext import commands
 from discord import app_commands
 from database.data import RotiDatabase
 from utils.RotiUtilities import cog_command
-from cogs.statistics.statistics_helpers import FunctionStatistics, RotiUsage, get_perf_statistics, get_usage_statistics
+from cogs.statistics.statistics_helpers import FunctionStatistics, RotiUsage, RotiPopulation, get_population, get_perf_statistics, get_usage_statistics
 
 @cog_command
 class Statistics(commands.GroupCog, group_name="statistics"):
@@ -53,9 +53,10 @@ class Statistics(commands.GroupCog, group_name="statistics"):
 
     def _build_usage_embed(self) -> discord.Embed:
         usage_stats : RotiUsage = get_usage_statistics(self.db, [guild.id for guild in self.bot.guilds])
+        population : RotiPopulation = get_population(self.bot, self.db, [guild.id for guild in self.bot.guilds])
         embed = discord.Embed(
             title="Roti Usage Statistics",
-            description="These are some global usage statistics on how much data is stored in Roti across all the servers it's in. They're mostly for debug purposes, but they're still fun to look at.",
+            description=f"Roti is registered in {population.servers} servers with {population.users} users!",
             colour=0xecc98e
         )
 
