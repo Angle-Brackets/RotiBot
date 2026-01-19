@@ -1,0 +1,76 @@
+name: Deploy RotiBot to GKE
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GKE_CLUSTER: ${{ secrets.GKE_CLUSTER_NAME }}
+  GKE_ZONE: ${{ secrets.GKE_ZONE }}
+  IMAGE: rotibot
+
+jobs:
+  setup-build-publish-deploy:
+    name: Setup, Build, Publish, and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+
+    - name: Configure Docker to use gcloud
+      run: |
+        gcloud auth configure-docker gcr.io
+
+    - name: Get GKE credentials
+      run: |
+        gcloud container clusters get-credentials "$GKE_CLUSTER" --zone "$GKE_ZONE"
+
+    - name: Build Docker image
+      run: |
+        docker build -t "gcr.io/$PROJECT_ID/$IMAGE:$GITHUB_SHA" \
+          -t "gcr.io/$PROJECT_ID/$IMAGE:latest" .
+
+    - name: Push Docker image
+      run: |
+        docker push "gcr.io/$PROJECT_ID/$IMAGE:$GITHUB_SHA"
+        docker push "gcr.io/$PROJECT_ID/$IMAGE:latest"
+
+    - name: Create/Update secrets in GKE
+      run: |
+        kubectl create secret generic rotibot-secrets \
+          --from-literal=TOKEN="${{ secrets.TOKEN }}" \
+          --from-literal=MUSIC_PASS="${{ secrets.MUSIC_PASS }}" \
+          --from-literal=APPLICATION_ID="${{ secrets.APPLICATION_ID }}" \
+          --from-literal=DATABASE="${{ secrets.DATABASE }}" \
+          --from-literal=MUSIC_IP="${{ secrets.MUSIC_IP }}" \ 
+          --from-literal=GCP_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}" \
+          --from-literal=GCP_SA_KEY="${{ secrets.GCP_SA_KEY }}" \
+          --from-literal=TEST_TOKEN="${{ secrets.TEST_TOKEN }}" \
+          --from-literal=TEST_APPLICATION_ID="${{ secrets.TEST_APPLICATION_ID }}" \
+          --from-literal=YOUTUBE_NAME="${{ secrets.YOUTUBE_NAME }}" \
+          --from-literal=YOUTUBE_PASS="${{ secrets.YOUTUBE_PASS }}" \
+          --from-literal=YOUTUBE_REFRESH_TOKEN="${{ secrets.YOUTUBE_REFRESH_TOKEN }}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Update deployment image
+      run: |
+        sed -i "s|PROJECT_ID|$PROJECT_ID|g" kubernetes/deployment.yaml
+
+    - name: Deploy to GKE
+      run: |
+        kubectl apply -f k8s/lavalink-deployment.yaml
+        kubectl apply -f k8s/deployment.yaml
+        kubectl rollout status deployment/lavalink
+        kubectl rollout status deployment/rotibot
+        kubectl get services -o wide
