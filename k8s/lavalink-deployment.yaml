@@ -15,11 +15,21 @@ data:
         enabled: true 
         oauthConfig:
           enabled: true
-        allowSearch: true 
-        allowDirectVideoIds: true 
-        allowDirectPlaylistIds: true 
+        allowSearch: true
+        allowDirectVideoIds: true
+        allowDirectPlaylistIds: true
+        remoteCipher:
+          url: "https://cipher.kikkia.dev/"
         clients:
+          - TV
           - TVHTML5EMBEDDED
+          - WEB
+          - MWEB
+          - WEBEMBEDDED
+          - MUSIC
+          - ANDROID_VR
+          - ANDROID_MUSIC
+          - IOS
         TVHTML5EMBEDDED:
           playlistLoading: false 
           videoLoading: false 
