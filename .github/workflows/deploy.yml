@@ -31,7 +31,7 @@ jobs:
 
     - name: Configure Docker to use gcloud
       run: |
-        gcloud auth configure-docker gcr.io
+        gcloud auth configure-docker us-central1-docker.pkg.dev
 
     - name: Get GKE credentials
       run: |
