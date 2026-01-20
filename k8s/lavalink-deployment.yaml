@@ -148,16 +148,18 @@ spec:
             cpu: "500m"
         livenessProbe:
           httpGet:
-            path: /
+            path: /version
             port: 2333
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 10
+          failureThreshold: 5
         readinessProbe:
           httpGet:
-            path: /
+            path: /version
             port: 2333
-          initialDelaySeconds: 15
+          initialDelaySeconds: 45
           periodSeconds: 5
+          failureThreshold: 3
       volumes:
       - name: config
         configMap:
