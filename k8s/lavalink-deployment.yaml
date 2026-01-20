@@ -146,20 +146,6 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "500m"
-        livenessProbe:
-          httpGet:
-            path: /version
-            port: 2333
-          initialDelaySeconds: 60
-          periodSeconds: 10
-          failureThreshold: 5
-        readinessProbe:
-          httpGet:
-            path: /version
-            port: 2333
-          initialDelaySeconds: 45
-          periodSeconds: 5
-          failureThreshold: 3
       volumes:
       - name: config
         configMap:
