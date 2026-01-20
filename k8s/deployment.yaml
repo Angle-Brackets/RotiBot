@@ -20,7 +20,7 @@ spec:
         command: ['sh', '-c', 'until nc -z lavalink 2333; do echo waiting for lavalink; sleep 2; done;']
       containers:
       - name: rotibot
-        image: gcr.io/PROJECT_ID/rotibot:latest
+        image: us-central1-docker.pkg.dev/PROJECT_ID/rotibot/rotibot:latest
         imagePullPolicy: Always
         env:
         - name: LAVALINK_HOST
