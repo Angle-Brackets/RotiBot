@@ -19,13 +19,7 @@ data:
         allowDirectVideoIds: true 
         allowDirectPlaylistIds: true 
         clients:
-          - MUSIC
-          - WEB
-          - ANDROID_TESTSUITE
           - TVHTML5EMBEDDED
-          - ANDROID_LITE
-          - MEDIA_CONNECT
-          - IOS
         TVHTML5EMBEDDED:
           playlistLoading: false 
           videoLoading: false 
