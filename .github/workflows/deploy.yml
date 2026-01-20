@@ -24,10 +24,12 @@ jobs:
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v2
       with:
-        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        credentials_json: ${{ secrets.GKE_SA_KEY }}
 
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
+      with:
+        install_components: 'gke-gcloud-auth-plugin'
 
     - name: Configure Docker to use gcloud
       run: |
@@ -36,6 +38,8 @@ jobs:
     - name: Get GKE credentials
       run: |
         gcloud container clusters get-credentials "$GKE_CLUSTER" --zone "$GKE_ZONE"
+      env:
+        USE_GKE_GCLOUD_AUTH_PLUGIN: 'True'
 
     - name: Build Docker image
       run: |
@@ -62,9 +66,9 @@ jobs:
           --from-literal=YOUTUBE_REFRESH_TOKEN="${{ secrets.YOUTUBE_REFRESH_TOKEN }}" \
           --dry-run=client -o yaml | kubectl apply -f -
 
-    - name: Update deployment image
+    - name: Update deployment manifests with project ID
       run: |
-        sed -i "s|PROJECT_ID|$PROJECT_ID|g" kubernetes/deployment.yaml
+        sed -i "s|PROJECT_ID|$PROJECT_ID|g" k8s/deployment.yaml
 
     - name: Deploy to GKE
       run: |
