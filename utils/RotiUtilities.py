@@ -109,4 +109,3 @@ class LogJSONFormatter(logging.Formatter):
                 message[key] = val
 
         return message
-

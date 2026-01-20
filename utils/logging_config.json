@@ -24,7 +24,7 @@
       "stdout": {
         "class": "logging.StreamHandler",
         "level": "INFO",
-        "formatter": "simple",
+        "formatter": "json",
         "stream": "ext://sys.stdout"
       },
       "stderr": {
@@ -32,14 +32,6 @@
         "level": "WARNING",
         "formatter": "simple",
         "stream": "ext://sys.stderr"
-      },
-      "file_json": {
-        "class": "logging.handlers.RotatingFileHandler",
-        "level": "WARNING",
-        "formatter": "json",
-        "filename": "logs/roti.log.jsonl",
-        "maxBytes": 10485760,
-        "backupCount": 3
       },
       "queue_handler": {
         "class": "logging.handlers.QueueHandler",
