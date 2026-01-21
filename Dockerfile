@@ -15,4 +15,4 @@ COPY main.py .
 COPY . .
 
 # Start the bot
-CMD ["python3", "main.py", "--music", "--show-cog-load", "--test"]
+CMD ["python3", "main.py", "--music", "--show-cog-load"]

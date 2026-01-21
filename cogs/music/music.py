@@ -160,8 +160,10 @@ class Music(commands.Cog):
                         except: pass
                     
                     # Clear the player and disconnect
+                    await player.stop()
                     player.queue.clear()
                     player.delete('queue_interaction')
+                    player.delete('queue_embed')
                     # Use your existing disconnect logic
                     await self.bot.get_guild(before.channel.guild.id).change_voice_state(channel=None)
                     
@@ -254,8 +256,10 @@ class Music(commands.Cog):
         if not player or not player.is_connected:
             return await interaction.followup.send("I'm not connected!")
         
+        await player.stop()
         player.queue.clear()
         player.delete('queue_interaction')
+        player.delete('queue_embed')
         await self.bot.get_guild(interaction.guild.id).change_voice_state(channel=None)
         await interaction.followup.send("Disconnected!")
             
@@ -276,6 +280,26 @@ class Music(commands.Cog):
                 self._update_queue_embed_time.start(player)
         else:
             await interaction.followup.send("The Queue is empty.")
+    
+    @app_commands.command(name="loop", description="Cycle through loop modes: Off, Single, or Queue.")
+    async def _loop(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        player = self.lavalink.player_manager.get(interaction.guild_id)
+        
+        if not player or not player.is_playing:
+            return await interaction.followup.send("Nothing is playing right now!")
+
+        # Lavalink.py loop modes: 0 = Off, 1 = Single Track, 2 = Queue
+        new_loop = (player.loop + 1) % 3
+        player.set_loop(new_loop)
+        
+        modes = {
+            0: "Looping disabled. ➡️",
+            1: "Looping the **current track**. 🔂",
+            2: "Looping the **entire queue**. 🔁"
+        }
+        
+        await interaction.followup.send(modes[new_loop])
     
     @app_commands.command(name="speed", description="Modify playback speed.")
     async def _speed(self, interaction: discord.Interaction, speed: typing.Optional[app_commands.Range[int, 0, 200]]):
@@ -361,9 +385,30 @@ class MusicNav(discord.ui.View):
         await self.player.skip()
         await it.response.send_message("Skipped!", ephemeral=True)
     
-    @discord.ui.button(emoji="<:disconnectbtn:996156534927130735>", style=discord.ButtonStyle.danger)
-    async def _close(self, it: discord.Interaction, btn):
-        await it.message.delete()
+    @discord.ui.button(emoji="<:disconnectbtn:996156534927130735>", style=discord.ButtonStyle.secondary)
+    async def _disconnect(self, it: discord.Interaction, btn):
+        # 1. Clear player data and stop updates
+        await self.player.stop()
+        self.player.queue.clear()
+        self.player.delete('queue_interaction')
+        self.player.delete('queue_embed')
+        
+        # 2. Reset the Voice Status (top of the VC)
+        if it.guild.me.guild_permissions.manage_channels:
+            vc = it.guild.get_channel(int(self.player.channel_id))
+            if vc:
+                try:
+                    await vc.edit(status=None)
+                except: pass
+
+        # 3. Disconnect from Voice
+        await it.guild.change_voice_state(channel=None)
+
+        # 5. Cleanup the UI
+        try:
+            await it.message.delete()
+        except:
+            pass
         self.stop()
 
     @discord.ui.button(label="Vol", style=discord.ButtonStyle.primary)
@@ -377,6 +422,11 @@ class MusicNav(discord.ui.View):
     @discord.ui.button(label="Pit", emoji="<:treble:996969244963131473>", style=discord.ButtonStyle.primary)
     async def _pitch_label(self, it: discord.Interaction, btn):
         await it.response.send_message("It's just a label..." if random.random() < 0.95 else "https://tinyurl.com/c9wcjhsc", ephemeral=True)
+    
+    @discord.ui.button(label="Close", style=discord.ButtonStyle.danger)
+    async def _close(self, it: discord.Interaction, btn):
+        await it.message.delete()
+        self.stop()
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Music(bot))
