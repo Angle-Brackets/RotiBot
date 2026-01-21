@@ -61,7 +61,7 @@ class Generate(commands.GroupCog, group_name = "generate"):
         await interaction.response.defer()
         response : str | None = await asyncio.to_thread(self.brain.generate_ai_response, prompt, None, None, model)
         if not response:
-            await interaction.followup.send("An error has occured, try again later.")
+            await interaction.followup.send("An error has occured, try again later.", ephemeral=True)
         await interaction.followup.send(response)
 
     @_gen_image.autocomplete(name="model")

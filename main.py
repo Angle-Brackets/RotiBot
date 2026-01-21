@@ -4,12 +4,10 @@
 import discord
 import aiohttp
 import os
-import wavelink
 import logging
 import inspect
 import importlib
 
-from dotenv import load_dotenv
 from discord.ext import commands
 from discord.utils import find
 from database.data import RotiDatabase
@@ -17,8 +15,6 @@ from database.bot_state import RotiState
 from utils.RotiUtilities import setup_logging
 from returns.maybe import Some, Nothing, Maybe
 
-#load credentials
-load_dotenv(".env")
 class Roti(commands.Bot):
     def __init__(self):
         setup_logging(config_file="utils/logging_config.json")
@@ -39,9 +35,9 @@ class Roti(commands.Bot):
         self.session = aiohttp.ClientSession()
         await self._load_cogs()
 
-        # Music bot setup
+        # Music bot setup - connection now handled in Music cog
         if self.state.args.music:
-            await self._setup_music_functionality()
+            self.logger.info("Music Functionality is Enabled!")
         else:
             self.logger.info("Music Functionality is Disabled!")
 
@@ -65,6 +61,12 @@ class Roti(commands.Bot):
                         )
 
                         if is_cog:
+                            # Skip music cog if music is disabled
+                            if "music" in module_name.lower() and not self.state.args.music:
+                                if show_output:
+                                    self.logger.info(f"Skipping {module_name} (music disabled)")
+                                continue
+                                
                             if show_output:
                                 self.logger.info(f"Loading {module_name} as cog command module.")
                             await self.load_extension(module_name)
@@ -75,14 +77,14 @@ class Roti(commands.Bot):
                     except Exception as e:
                         self.logger.error(f"Failed to load {module_name}: {e}")
         
-    async def _setup_music_functionality(self):
-        nodes = [wavelink.Node(uri=fr"http://{self.state.credentials.music_ip}:2333", password=self.state.credentials.music_pass)]
-        await wavelink.Pool.connect(nodes=nodes, client=self, cache_capacity=100)
-        
     async def close(self):
         await super().close()
         await self.db.shutdown()
         await self.session.close()
+        
+        # Cleanup lavalink connection if it exists
+        if hasattr(self, 'lavalink'):
+            await self.lavalink.close()
 
     async def on_guild_join(self, guild : discord.Guild):
         # tries to find a general channel in the discord to send this in.

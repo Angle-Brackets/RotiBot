@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rotibot
+  labels:
+    app: rotibot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rotibot
+  template:
+    metadata:
+      labels:
+        app: rotibot
+    spec:
+      initContainers:
+      - name: wait-for-lavalink
+        image: busybox:1.28
+        command: ['sh', '-c', 'until nc -z lavalink 2333; do echo waiting for lavalink; sleep 2; done;']
+      containers:
+      - name: rotibot
+        image: us-central1-docker.pkg.dev/PROJECT_ID/rotibot/rotibot:latest
+        imagePullPolicy: Always
+        env:
+        - name: LAVALINK_HOST
+          value: "lavalink"
+        - name: LAVALINK_PORT
+          value: "2333"
+        envFrom:
+        - secretRef:
+            name: rotibot-secrets
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "250m"

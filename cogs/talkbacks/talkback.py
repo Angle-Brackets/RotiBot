@@ -229,8 +229,7 @@ class Talkback(commands.GroupCog, group_name="talkback"):
                 self.brain.generate_ai_response, 
                 f"{message.author.display_name} said {message.content} to you! You should respond with the current chat context provided with a similar tone to what this person said to you!", 
                 chat_history, 
-                msg_format, 
-                "llama"
+                msg_format
             )
 
             if not response:

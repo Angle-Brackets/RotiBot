@@ -98,11 +98,8 @@
         "arguments": {}
       },
       "loop": {
-        "description": "Allows for the current song to be looped indefinitely.",
-        "usage": "/loop [mode] (must be in a voice channel)",
-        "arguments": {
-          "mode": "Enable/Disable whether Roti is looping the current song."
-        }
+        "description": "Cycle through loop modes: No loop, single song loop, or queue loop!",
+        "usage": "/loop"
       },
       "volume": {
         "description": "Modifies the base music playback volume of Roti for **ALL** listeners.",
