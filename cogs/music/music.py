@@ -7,7 +7,7 @@ import logging
 
 from discord.ext import commands, tasks
 from discord import app_commands
-from database.data import RotiDatabase
+from database.data import RotiDatabase, RotiState
 from time import strftime, gmtime
 from utils.RotiUtilities import cog_command
 from cogs.statistics.statistics_helpers import statistic
@@ -82,6 +82,7 @@ class Music(commands.Cog):
         self.bot = bot
         self.logger = logging.getLogger(__name__)
         self.db = RotiDatabase()
+        self.state = RotiState()
         
         if not hasattr(bot, 'lavalink'):
             bot.lavalink = lavalink.Client(bot.user.id)
@@ -91,9 +92,9 @@ class Music(commands.Cog):
             self.lavalink.add_event_hooks(self)
         
     async def cog_load(self):
-        host = os.getenv('LAVALINK_HOST', '127.0.0.1')
+        host = self.state.credentials.music_ip
         port = int(os.getenv('LAVALINK_PORT', '2333'))
-        password = os.getenv('MUSIC_PASS', 'youshallnotpass')
+        password = self.state.credentials.music_pass
         
         if not self.lavalink.node_manager.nodes:
             self.lavalink.add_node(host, port, password, 'us', 'default-node')
