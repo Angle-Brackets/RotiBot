@@ -2,13 +2,11 @@ import typing
 import os
 import discord
 import lavalink
-import time
 import random
 import logging
 
 from discord.ext import commands, tasks
 from discord import app_commands
-from dotenv import load_dotenv
 from database.data import RotiDatabase
 from time import strftime, gmtime
 from utils.RotiUtilities import cog_command
@@ -102,11 +100,28 @@ class Music(commands.Cog):
 
     @lavalink.listener(lavalink.events.TrackStartEvent)
     async def track_start(self, event: lavalink.events.TrackStartEvent):
-        channel_id = event.player.fetch('channel')
-        if channel_id:
-            channel = self.bot.get_channel(channel_id)
+        player = event.player
+        guild = self.bot.get_guild(player.guild_id)
+        
+        # 1. Standard "Now Playing" message
+        cid = player.fetch('channel')
+        if cid:
+            channel = self.bot.get_channel(cid)
             if channel:
                 await channel.send(f"Now playing **{event.track.title}**!", delete_after=20)
+
+        # 2. Voice Status Feature
+        if guild.me.guild_permissions.manage_channels:
+            voice_channel = guild.get_channel(int(player.channel_id))
+            if voice_channel:
+                status = f"Playing: {event.track.title}"
+                if len(status) > 32:
+                    status = status[:29] + "..."
+                
+                try:
+                    await voice_channel.edit(status=status)
+                except Exception as e:
+                    self.logger.error(f"Failed to set voice status: {e}")
 
     @lavalink.listener(lavalink.events.TrackEndEvent)
     async def track_end(self, event: lavalink.events.TrackEndEvent):
@@ -118,6 +133,43 @@ class Music(commands.Cog):
                 await interaction.edit_original_response(embed=embed)
             except:
                 pass
+                
+        if not player.queue and not player.is_playing:
+            guild = self.bot.get_guild(player.guild_id)
+            voice_channel = guild.get_channel(int(player.channel_id))
+            if voice_channel and guild.me.guild_permissions.manage_channels:
+                await voice_channel.edit(status=None)
+    
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        # We only care if someone leaves a channel
+        if before.channel is not None and after.channel is None:
+            # Check if the channel they left is the one the bot is in
+            player = self.lavalink.player_manager.get(before.channel.guild.id)
+            if not player or not player.is_connected:
+                return
+
+            if before.channel.id == int(player.channel_id):
+                # Check if there are any non-bot members left
+                if not any(not m.bot for m in before.channel.members):
+                    # Reset the Voice Status (the feature we just added)
+                    if before.channel.guild.me.guild_permissions.manage_channels:
+                        try:
+                            await before.channel.edit(status=None)
+                        except: pass
+                    
+                    # Clear the player and disconnect
+                    player.queue.clear()
+                    player.delete('queue_interaction')
+                    # Use your existing disconnect logic
+                    await self.bot.get_guild(before.channel.guild.id).change_voice_state(channel=None)
+                    
+                    # Optional: Send a notification to the last text channel used
+                    cid = player.fetch('channel')
+                    if cid:
+                        channel = self.bot.get_channel(cid)
+                        if channel:
+                            await channel.send("Leaving voice channel as it is empty. ✌️", delete_after=10)
 
     @tasks.loop(seconds=1)
     async def _update_queue_embed_time(self, player: lavalink.DefaultPlayer):
@@ -136,6 +188,24 @@ class Music(commands.Cog):
                 self._update_queue_embed_time.stop()
         except:
             self._update_queue_embed_time.stop()
+    
+    @app_commands.command(name="join", description="Join your current voice channel.")
+    async def _join(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        if not interaction.user.voice:
+            return await interaction.followup.send("You are not in a voice channel!")
+        
+        player = self.lavalink.player_manager.create(interaction.guild.id)
+        if player.is_connected:
+            return await interaction.followup.send("I'm already in a voice channel!")
+            
+        player.store('channel', interaction.channel.id)
+        await interaction.user.voice.channel.connect(cls=LavalinkVoiceClient)
+        await interaction.followup.send(f"Joined **{interaction.user.voice.channel.name}**!")
+    
+    @statistic(display_name="Music Queries", category="Music")
+    async def _get_tracks(self, player : lavalink.BasePlayer, query : str) -> lavalink.LoadResult:
+        return await player.node.get_tracks(query if query.startswith('http') else f'ytsearch:{query}')
 
     @app_commands.command(name="play", description="Play audio from a URL or query.")
     async def _play(self, interaction: discord.Interaction, *, query: str):
@@ -150,7 +220,7 @@ class Music(commands.Cog):
             player.store('channel', interaction.channel.id)
             await interaction.user.voice.channel.connect(cls=LavalinkVoiceClient)
 
-        results = await player.node.get_tracks(query if query.startswith('http') else f'ytsearch:{query}')
+        results = await self._get_tracks(player, query)
         
         if not results or not results.tracks:
             return await interaction.followup.send("No results found.")
@@ -173,8 +243,16 @@ class Music(commands.Cog):
     async def _disconnect(self, interaction: discord.Interaction):
         await interaction.response.defer()
         player = self.lavalink.player_manager.get(interaction.guild.id)
+
+        if player:
+            if interaction.guild.me.guild_permissions.manage_channels:
+                vc = interaction.guild.get_channel(int(player.channel_id))
+                if vc:
+                    await vc.edit(status=None)
+
         if not player or not player.is_connected:
             return await interaction.followup.send("I'm not connected!")
+        
         player.queue.clear()
         player.delete('queue_interaction')
         await self.bot.get_guild(interaction.guild.id).change_voice_state(channel=None)

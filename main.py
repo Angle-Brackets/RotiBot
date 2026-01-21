@@ -8,16 +8,12 @@ import logging
 import inspect
 import importlib
 
-from dotenv import load_dotenv
 from discord.ext import commands
 from discord.utils import find
 from database.data import RotiDatabase
 from database.bot_state import RotiState
 from utils.RotiUtilities import setup_logging
 from returns.maybe import Some, Nothing, Maybe
-
-#load credentials
-load_dotenv(".env")
 
 class Roti(commands.Bot):
     def __init__(self):
