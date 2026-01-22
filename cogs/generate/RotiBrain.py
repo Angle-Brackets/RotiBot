@@ -33,14 +33,20 @@ class RotiBrain:
     def __init__(self):
         self.behavior_prompt : str = _ROTI_BEHAVIOR_PROMPT
         self.text_models : Dict[str, TextModel] = self._get_text_models()
-        self.image_models : List[ImageModel] = self._get_image_models()[:-1] # TODO: The last model is currently unavailable for poor people like me!
+        self.image_models : List[ImageModel] = self._get_image_models()
         self.logger = logging.getLogger(__name__)
 
     # Generates an image with a given query.
     @statistic(display_name="Generate Image", category="Generate")
     def generate_image(self, prompt, model) -> BytesIO:
-        seed = random.randint(0, 10*100)
-        query = f"https://pollinations.ai/p/{prompt}?seed={seed}&model={model}&private=true"
+        """
+        Generates an AI image response with the given model and prompt.
+        The seed is randomized (API signifies -1 as random) to make a different image with the same prompt.
+        "Enhance" is set to true to give the best image output.
+
+        API Docs: https://enter.pollinations.ai/api/docs#tag/genpollinationsai/GET/text/{prompt}
+        """
+        query = f"https://image.pollinations.ai/prompt/{prompt}?seed=-1&model={model}&enhance=true"
         
         # Create an in-memory buffer to hold the image data
         headers = {"Accept": "image/png"}
@@ -49,8 +55,14 @@ class RotiBrain:
             return None
 
         image_data = BytesIO(req.content)
-        image = Image.open(image_data)
-
+        try:
+            image = Image.open(image_data)
+        except Exception as e:
+            self.logger.warning("Failed to open image: %s", e)
+            self.logger.warning("Response content type:\n%s", req.headers.get('content-type'))
+            self.logger.warning("Response content (first 100 chars):%s", req.content[:100])
+            return None
+        
         # Save the image to another in-memory buffer
         image_buffer = BytesIO()
         image.save(image_buffer, format="PNG")
