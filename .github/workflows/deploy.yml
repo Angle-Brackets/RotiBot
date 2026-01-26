@@ -68,6 +68,7 @@ jobs:
     - name: Update deployment manifests with project ID
       run: |
         sed -i "s|PROJECT_ID|$PROJECT_ID|g" k8s/deployment.yaml
+        sed -i "s|:latest|:$GITHUB_SHA|g" k8s/deployment.yaml
 
     - name: Deploy to GKE
       run: |
