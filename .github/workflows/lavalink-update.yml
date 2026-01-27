@@ -1,0 +1,235 @@
+name: Update Lavalink Plugins
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # Allow manual triggering
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-updates:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+    
+    - name: Install dependencies
+      run: |
+        pip install pyyaml requests packaging
+    
+    - name: Check for plugin updates
+      id: check
+      run: |
+        python3 << 'EOF'
+        import yaml
+        import requests
+        import re
+        from packaging import version
+        
+        def get_latest_version(group_id, artifact_id):
+            """Get latest version from Maven Central"""
+            # Try Maven Central first
+            url = f"https://search.maven.org/solrsearch/select?q=g:{group_id}+AND+a:{artifact_id}&rows=1&wt=json"
+            try:
+                resp = requests.get(url, timeout=10)
+                resp.raise_for_status()
+                data = resp.json()
+                if data['response']['numFound'] > 0:
+                    return data['response']['docs'][0]['latestVersion']
+            except Exception as e:
+                print(f"Maven Central failed: {e}")
+            
+            # Fallback to maven.lavalink.dev
+            url = f"https://maven.lavalink.dev/releases/{group_id.replace('.', '/')}/{artifact_id}/maven-metadata.xml"
+            try:
+                resp = requests.get(url, timeout=10)
+                resp.raise_for_status()
+                # Extract version from XML
+                match = re.search(r'<latest>([^<]+)</latest>', resp.text)
+                if match:
+                    return match.group(1)
+                match = re.search(r'<release>([^<]+)</release>', resp.text)
+                if match:
+                    return match.group(1)
+            except Exception as e:
+                print(f"Lavalink maven failed: {e}")
+            
+            return None
+        
+        # Read current configuration
+        with open('k8s/lavalink-deployment.yaml', 'r') as f:
+            content = f.read()
+            # Extract YAML from ConfigMap
+            config_start = content.find('application.yml: |')
+            if config_start == -1:
+                print("Could not find application.yml in ConfigMap")
+                exit(1)
+            
+            yaml_content = content[config_start + len('application.yml: |'):].split('---')[0]
+            config = yaml.safe_load(yaml_content)
+        
+        plugins = config.get('lavalink', {}).get('plugins', [])
+        updates_needed = []
+        
+        # Check each plugin
+        for plugin in plugins:
+            dependency = plugin.get('dependency', '')
+            if not dependency:
+                continue
+            
+            # Parse dependency string: "group:artifact:version"
+            parts = dependency.split(':')
+            if len(parts) != 3:
+                continue
+            
+            group_id, artifact_id, current_version = parts
+            
+            # Get latest version
+            latest_version = get_latest_version(group_id, artifact_id)
+            
+            if not latest_version:
+                print(f"Could not fetch latest version for {artifact_id}")
+                continue
+            
+            print(f"{artifact_id}: {current_version} -> {latest_version}")
+            
+            # Compare versions
+            try:
+                if version.parse(latest_version) > version.parse(current_version):
+                    updates_needed.append({
+                        'artifact': artifact_id,
+                        'current': current_version,
+                        'latest': latest_version,
+                        'dependency': dependency,
+                        'new_dependency': f"{group_id}:{artifact_id}:{latest_version}"
+                    })
+            except Exception as e:
+                print(f"Version comparison failed for {artifact_id}: {e}")
+        
+        if updates_needed:
+            print("Updates available!")
+            # Write to output file for next step
+            with open('/tmp/updates.txt', 'w') as f:
+                for update in updates_needed:
+                    f.write(f"{update['dependency']}|{update['new_dependency']}|{update['artifact']}|{update['current']}|{update['latest']}\n")
+            
+            # Set GitHub Actions output
+            with open('/tmp/has_updates', 'w') as f:
+                f.write('true')
+        else:
+            print("All plugins are up to date!")
+            with open('/tmp/has_updates', 'w') as f:
+                f.write('false')
+        EOF
+        
+        # Read output
+        HAS_UPDATES=$(cat /tmp/has_updates)
+        echo "has_updates=$HAS_UPDATES" >> $GITHUB_OUTPUT
+    
+    - name: Update plugin versions
+      if: steps.check.outputs.has_updates == 'true'
+      run: |
+        # Read updates
+        while IFS='|' read -r old_dep new_dep artifact old_ver new_ver; do
+          echo "Updating $artifact from $old_ver to $new_ver"
+          
+          # Update the YAML file
+          sed -i "s|$old_dep|$new_dep|g" k8s/lavalink-deployment.yaml
+          
+          # Store for PR description
+          echo "- **$artifact**: $old_ver → $new_ver" >> /tmp/pr_body.txt
+        done < /tmp/updates.txt
+    
+    - name: Create Pull Request
+      if: steps.check.outputs.has_updates == 'true'
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "chore: update Lavalink plugins"
+        title: "🔄 Update Lavalink Plugins"
+        body: |
+          ## Lavalink Plugin Updates Available
+          
+          This PR updates the following Lavalink plugins to their latest versions:
+          
+          $(cat /tmp/pr_body.txt)
+          
+          ### What's Changed
+          - Updated plugin versions in `k8s/lavalink-deployment.yaml`
+          
+          ### Testing Checklist
+          - [ ] Verify Lavalink starts successfully
+          - [ ] Test music playback (/play command)
+          - [ ] Check for any breaking changes in plugin changelogs
+          
+          ### Links
+          - [YouTube Plugin Changelog](https://github.com/lavalink-devs/youtube-source/releases)
+          - [LavaSrc Plugin Changelog](https://github.com/topi314/LavaSrc/releases)
+          
+          ---
+          
+          *This PR was automatically created by the plugin update workflow.*
+          *Review the changes and merge when ready to deploy.*
+        branch: update-lavalink-plugins
+        delete-branch: true
+        labels: |
+          dependencies
+          automated
+          lavalink
+    
+    - name: Comment on PR with deployment instructions
+      if: steps.check.outputs.has_updates == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const pr = context.payload.pull_request;
+          if (pr) {
+            github.rest.issues.createComment({
+              issue_number: pr.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🚀 Deployment Instructions
+              
+              After merging this PR, the following will happen automatically:
+              
+              1. ✅ Lavalink deployment will be updated with new plugin versions
+              2. ✅ Lavalink pod will restart to download new plugins
+              3. ✅ RotiBot will reconnect to Lavalink automatically
+              
+              **Expected downtime**: ~30-60 seconds during Lavalink restart
+              
+              ### Manual Verification (Optional)
+              
+              After deployment completes, you can verify the updates:
+              
+              \`\`\`bash
+              # Check Lavalink version
+              kubectl logs deployment/lavalink | grep "Loaded.*plugin"
+              
+              # Verify music playback
+              # Use /play command in Discord
+              \`\`\`
+              
+              ### Rollback (If Needed)
+              
+              If something breaks, you can quickly rollback:
+              
+              \`\`\`bash
+              # Revert to previous deployment
+              kubectl rollout undo deployment/lavalink
+              \`\`\`
+              `
+            });
+          }
