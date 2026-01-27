@@ -23,7 +23,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.12'
+        python-version: '3.11'
     
     - name: Install dependencies
       run: |
@@ -69,7 +69,7 @@ jobs:
             return None
         
         # Read current configuration
-        with open('k8s/lavalink-deployment.yaml', 'r') as f:
+        with open('kubernetes/lavalink-deployment.yaml', 'r') as f:
             content = f.read()
             # Extract YAML from ConfigMap
             config_start = content.find('application.yml: |')
@@ -135,34 +135,48 @@ jobs:
         EOF
         
         # Read output
-        HAS_UPDATES=$(cat /tmp/has_updates)
+        if [ -f /tmp/has_updates ]; then
+            HAS_UPDATES=$(cat /tmp/has_updates)
+        else
+            HAS_UPDATES="false"
+        fi
         echo "has_updates=$HAS_UPDATES" >> $GITHUB_OUTPUT
     
     - name: Update plugin versions
+      id: update
       if: steps.check.outputs.has_updates == 'true'
       run: |
         # Read updates
+        COMMIT_MSG="chore: update Lavalink plugins - "
+        PLUGIN_NAMES=""
+        PR_BODY=""
+        
         while IFS='|' read -r old_dep new_dep artifact old_ver new_ver; do
           echo "Updating $artifact from $old_ver to $new_ver"
           
           # Update the YAML file
-          sed -i "s|$old_dep|$new_dep|g" k8s/lavalink-deployment.yaml
+          sed -i "s|$old_dep|$new_dep|g" kubernetes/lavalink-deployment.yaml
           
-          # Store for PR description
-          echo "- **$artifact**: $old_ver → $new_ver" >> /tmp/pr_body.txt
+          # Build PR body (Added newline for markdown formatting)
+          PR_BODY="${PR_BODY}- **${artifact}**: ${old_ver} → ${new_ver}"$'\n'
+          
+          # Build commit message
+          PLUGIN_NAMES="${PLUGIN_NAMES}${artifact} ${new_ver}, "
         done < /tmp/updates.txt
-
+        
+        # Remove trailing comma and space
         PLUGIN_NAMES="${PLUGIN_NAMES%, }"
         COMMIT_MSG="${COMMIT_MSG}${PLUGIN_NAMES}"
         
         # Save outputs
         echo "commit_message=$COMMIT_MSG" >> $GITHUB_OUTPUT
         
-        # Save PR body to output (multi-line)
-        echo "pr_body<<EOF" >> $GITHUB_OUTPUT
-        echo "$PR_BODY" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-      id: update
+        # Save PR body to output (multi-line safe)
+        {
+          echo "pr_body<<EOF"
+          echo -e "$PR_BODY"
+          echo "EOF"
+        } >> $GITHUB_OUTPUT
     
     - name: Create Pull Request
       if: steps.check.outputs.has_updates == 'true'
@@ -179,7 +193,7 @@ jobs:
           ${{ steps.update.outputs.pr_body }}
           
           ### What's Changed
-          - Updated plugin versions in `k8s/lavalink-deployment.yaml`
+          - Updated plugin versions in `kubernetes/lavalink-deployment.yaml`
           
           ### Testing Checklist
           - [ ] Verify Lavalink starts successfully
@@ -194,7 +208,7 @@ jobs:
           
           *This PR was automatically created by the plugin update workflow.*
           *Review the changes and merge when ready to deploy.*
-        branch: automated-update-lavalink-plugins
+        branch: update-lavalink-plugins
         delete-branch: true
         labels: |
           dependencies
