@@ -151,20 +151,32 @@ jobs:
           # Store for PR description
           echo "- **$artifact**: $old_ver → $new_ver" >> /tmp/pr_body.txt
         done < /tmp/updates.txt
+
+        PLUGIN_NAMES="${PLUGIN_NAMES%, }"
+        COMMIT_MSG="${COMMIT_MSG}${PLUGIN_NAMES}"
+        
+        # Save outputs
+        echo "commit_message=$COMMIT_MSG" >> $GITHUB_OUTPUT
+        
+        # Save PR body to output (multi-line)
+        echo "pr_body<<EOF" >> $GITHUB_OUTPUT
+        echo "$PR_BODY" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+      id: update
     
     - name: Create Pull Request
       if: steps.check.outputs.has_updates == 'true'
       uses: peter-evans/create-pull-request@v5
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-        commit-message: "chore: update Lavalink plugins"
+        commit-message: ${{ steps.update.outputs.commit_message }}
         title: "🔄 Update Lavalink Plugins"
         body: |
           ## Lavalink Plugin Updates Available
           
           This PR updates the following Lavalink plugins to their latest versions:
           
-          $(cat /tmp/pr_body.txt)
+          ${{ steps.update.outputs.pr_body }}
           
           ### What's Changed
           - Updated plugin versions in `k8s/lavalink-deployment.yaml`
@@ -182,7 +194,7 @@ jobs:
           
           *This PR was automatically created by the plugin update workflow.*
           *Review the changes and merge when ready to deploy.*
-        branch: update-lavalink-plugins
+        branch: automated-update-lavalink-plugins
         delete-branch: true
         labels: |
           dependencies
