@@ -69,7 +69,7 @@ jobs:
             return None
         
         # Read current configuration
-        with open('kubernetes/lavalink-deployment.yaml', 'r') as f:
+        with open('k8s/lavalink-deployment.yaml', 'r') as f:
             content = f.read()
             # Extract YAML from ConfigMap
             config_start = content.find('application.yml: |')
@@ -155,7 +155,7 @@ jobs:
           echo "Updating $artifact from $old_ver to $new_ver"
           
           # Update the YAML file
-          sed -i "s|$old_dep|$new_dep|g" kubernetes/lavalink-deployment.yaml
+          sed -i "s|$old_dep|$new_dep|g" k8s/lavalink-deployment.yaml
           
           # Build PR body (Added newline for markdown formatting)
           PR_BODY="${PR_BODY}- **${artifact}**: ${old_ver} → ${new_ver}"$'\n'
@@ -193,7 +193,7 @@ jobs:
           ${{ steps.update.outputs.pr_body }}
           
           ### What's Changed
-          - Updated plugin versions in `kubernetes/lavalink-deployment.yaml`
+          - Updated plugin versions in `k8s/lavalink-deployment.yaml`
           
           ### Testing Checklist
           - [ ] Verify Lavalink starts successfully
