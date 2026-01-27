@@ -70,6 +70,10 @@ jobs:
         sed -i "s|PROJECT_ID|$PROJECT_ID|g" k8s/deployment.yaml
         sed -i "s|:latest|:$GITHUB_SHA|g" k8s/deployment.yaml
 
+        # Calculate ConfigHash to determine if we need to update the lavalink deployment
+        CONFIG_HASH=$(kubectl create configmap temp-config --from-file=k8s/lavalink-deployment.yaml --dry-run=client -o yaml | sha256sum | cut -d' ' -f1)
+        sed -i "s|CONFIGMAP_HASH|$CONFIG_HASH|g" k8s/lavalink-deployment.yaml
+
     - name: Deploy to GKE
       run: |
         kubectl apply -f k8s/lavalink-deployment.yaml
