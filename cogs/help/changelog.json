@@ -1,11 +1,8 @@
 {
-  "version": "Alpha V1.9.8",
-  "summary": "Before Beta x3! (And bug fixes)",
+  "version": "Alpha V1.9.9",
+  "summary": "Before Beta x4! (And bug fixes)",
   "changes": {
-    "Major features (1.9.7)": "No new features in this release, but the music engine has been migrated from wavelink.py to lavalink.py internally due to the former being unmaintained now. This should result in better stability with music in addition to Lavalink getting its own dedicated pod now.",
-    "Internal Updates (1.9.8)": "Added an architecture diagram and explanation because I will probably forget how it all works in a week.",
-    "Internal Updates (1.9.7)": "Migrated to Google Kubernetes Engine and a fully integrated CI/CD pipeline for Roti! So hopefully no more annoying last-minute manual VM fixes.",
-    "Bug Fixes (1.9.8)": "-Fixed AI image generation not working.",
-    "Bug Fixes (1.9.7)": "-Fixed bug where AI responses just..stopped working.\n-Fixed bug where MOTD shuffling stopped working."
+    "Major features (1.9.9)": "-Readded /skip command for music playback.\n-Updated /help music to not say that music is broken still.",
+    "Bug Fixes (1.9.9)": "-Fixed AI talkbacks and /generate text, though they are limited to only using the openai API due to changes with the service."
   }
 }
