@@ -58,8 +58,9 @@ class Generate(commands.GroupCog, group_name = "generate"):
     @app_commands.command(name="text", description="Have Roti respond to what you say!")
     @app_commands.describe(prompt="The text prompt you want to give to Roti without any prior context.", model="Text Model to use")
     async def _gen_text(self, interaction : discord.Interaction, prompt : str, model : Optional[str]):
+        # 1/27/26: It looks like openai is the only publicly available model that lets me have this richer POST interface. Sorry, the model argument is pointless right now!
         await interaction.response.defer()
-        response : str | None = await asyncio.to_thread(self.brain.generate_ai_response, prompt, None, None, model)
+        response : str | None = await asyncio.to_thread(self.brain.generate_ai_response, prompt, None, None, None)
         if not response:
             await interaction.followup.send("An error has occured, try again later.", ephemeral=True)
         await interaction.followup.send(response)

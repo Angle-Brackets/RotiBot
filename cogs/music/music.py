@@ -46,10 +46,19 @@ def _generate_queue_embed(player: lavalink.DefaultPlayer, interaction: discord.I
     if not current:
         return discord.Embed(description="Nothing is playing right now.", color=0xecc98e)
 
+    # 1. Remaining time on current track
+    current_remaining = current.duration - player.position
+    
+    # 2. Total duration of all songs in the queue
+    queue_duration = sum(t.duration for t in player.queue)
+    
+    # 3. Total time until music stops
+    total_remaining_ms = current_remaining + queue_duration
+    total_remaining_str = strftime('%H:%M:%S', gmtime(total_remaining_ms // 1000))
+
     pos = strftime('%H:%M:%S', gmtime(player.position // 1000))
     dur = strftime('%H:%M:%S', gmtime(current.duration // 1000))
     
-    # 0 = None, 1 = Track, 2 = Queue
     loop_status = "playing" if player.loop == 0 else "looping"
 
     embed = discord.Embed(
@@ -57,17 +66,30 @@ def _generate_queue_embed(player: lavalink.DefaultPlayer, interaction: discord.I
         description=f"Currently {loop_status}: [{current.title}]({current.uri}) [{pos}/{dur}]", 
         color=0xecc98e
     )
-    
-    embed.set_footer(text="Special thanks to Lavalink & devoxin for the lavalink.py library!")
 
-    # Native metadata: fetching requester directly from the track
+    # --- Queue List Display ---
+    QUEUE_LENGTH = 10
     if player.queue:
-        for i, track in enumerate(player.queue[:5], start=1):
+        for i, track in enumerate(player.queue[:QUEUE_LENGTH], start=1):
+            track_dur = strftime('%H:%M:%S', gmtime(track.duration // 1000))
             embed.add_field(
-                name=f"{i}. {track.title} - [{strftime('%H:%M:%S', gmtime(track.duration // 1000))}]", 
+                name=f"{i}. {track.title} - [{track_dur}]", 
                 value=f"Requested by: <@{track.requester}>", 
                 inline=False
             )
+        
+        # Check if there are hidden songs
+        remaining_count = len(player.queue) - QUEUE_LENGTH
+        if remaining_count > 0:
+            embed.add_field(
+                name=f"... and {remaining_count} more songs.",
+                value=f"**Total Estimated Time:** {total_remaining_str}",
+                inline=False
+            )
+        else:
+            embed.set_footer(text=f"Total Estimated Time: {total_remaining_str}")
+    else:
+        embed.set_footer(text=f"Queue empty | Ends in: {strftime('%H:%M:%S', gmtime(current_remaining // 1000))}")
 
     if current and hasattr(current, 'artwork_url'):
         embed.set_thumbnail(url=current.artwork_url)
@@ -83,6 +105,7 @@ class Music(commands.Cog):
         self.logger = logging.getLogger(__name__)
         self.db = RotiDatabase()
         self.state = RotiState()
+        self.MAX_TRACKS = 100
         
         if not hasattr(bot, 'lavalink'):
             bot.lavalink = lavalink.Client(bot.user.id)
@@ -164,10 +187,9 @@ class Music(commands.Cog):
                     player.queue.clear()
                     player.delete('queue_interaction')
                     player.delete('queue_embed')
-                    # Use your existing disconnect logic
                     await self.bot.get_guild(before.channel.guild.id).change_voice_state(channel=None)
                     
-                    # Optional: Send a notification to the last text channel used
+                    # Send a notification to the last text channel used
                     cid = player.fetch('channel')
                     if cid:
                         channel = self.bot.get_channel(cid)
@@ -227,11 +249,30 @@ class Music(commands.Cog):
         
         if not results or not results.tracks:
             return await interaction.followup.send("No results found.")
+        if len(player.queue) >= self.MAX_TRACKS:
+            return await interaction.followup.send(f"The queue is currently full at {self.MAX_TRACKS} songs!")
 
         if results.load_type == lavalink.LoadType.PLAYLIST:
-            for track in results.tracks:
-                player.add(requester=interaction.user.id, track=track)
-            await interaction.followup.send(f"Added playlist **{results.playlist_info.name}**")
+            tracks_to_add = results.tracks
+
+            if len(tracks_to_add) + len(player.queue) <= self.MAX_TRACKS:
+                for track in tracks_to_add:
+                    player.add(requester=interaction.user.id, track=track)
+                
+                await interaction.followup.send(
+                    f"Added playlist **{results.playlist_info.name}** "
+                    f"({len(tracks_to_add)} tracks)."
+                )
+            else:
+                remaining_space = self.MAX_TRACKS - len(player.queue)
+
+                for track in tracks_to_add[:remaining_space]:
+                    player.add(requester=interaction.user.id, track=track)
+
+                await interaction.followup.send(
+                    f"Playlist **{results.playlist_info.name}** is too large! "
+                    f"Added the first **{remaining_space}** tracks."
+                )
         else:
             track = results.tracks[0]
             player.add(requester=interaction.user.id, track=track)
@@ -242,10 +283,35 @@ class Music(commands.Cog):
             await player.set_volume(vol)
             await player.play()
     
+    @app_commands.command(name="skip", description="Skips the current track playing")
+    async def _skip(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        player = self.lavalink.player_manager.get(interaction.guild.id)
+
+        if not player or not player.is_connected:
+            return await interaction.followup.send("I'm not in a voice channel!")
+        
+        if not player.current:
+            return await interaction.followup.send("Nothing is playing.")
+
+        # If this is the last song in the queue, clear status.
+        if not player.queue:
+            guild = interaction.guild
+            voice_channel = guild.get_channel(int(player.channel_id))
+            if voice_channel and guild.me.guild_permissions.manage_channels:
+                await voice_channel.edit(status=None)
+
+        await interaction.followup.send(f"Skipped {player.current.title}")
+        await player.skip()
+            
+    
     @app_commands.command(name="disconnect", description="Disconnects the bot.")
     async def _disconnect(self, interaction: discord.Interaction):
         await interaction.response.defer()
         player = self.lavalink.player_manager.get(interaction.guild.id)
+
+        if not player or not player.is_connected:
+            return await interaction.followup.send("I'm not connected!")
 
         if player:
             if interaction.guild.me.guild_permissions.manage_channels:
@@ -253,9 +319,6 @@ class Music(commands.Cog):
                 if vc:
                     await vc.edit(status=None)
 
-        if not player or not player.is_connected:
-            return await interaction.followup.send("I'm not connected!")
-        
         await player.stop()
         player.queue.clear()
         player.delete('queue_interaction')

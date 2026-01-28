@@ -73,23 +73,24 @@ class RotiBrain:
     
  
     @statistic(display_name="Generate Text", category="Generate")
-    def generate_ai_response(self, prompt : str, context : Optional[str], context_format : Optional[str], model = "gemini") -> str | None:
+    def generate_ai_response(self, prompt : str, context : Optional[str], context_format : Optional[str], model = "openai") -> str | None:
         """
         Generates an AI text response given the prompt and model.
         This function also takes in the context that you wish to give the bot for it to have a more intelligent response.
 
         The response is a dictionary with one field called "response", but there's a failsafe 
         to print a string if that's not the format.
+
+        1/27/26: It looks like openai is the only publicly available model that lets me have this richer POST interface. Sorry!
         """ 
-        url = r"https://text.pollinations.ai/"
+        url = r"https://text.pollinations.ai/openai"
         payload = {
             "messages" : [
                 {"role": "system", "content": self.behavior_prompt},
                 {"role": "user", "content": self._inject_context(prompt, context, context_format)}
             ],
             "model": model,
-            "seed": random.randint(0, 10*100),
-            "jsonMode": False
+            "reasoning_effort": "medium"
         }
 
         headers = {
@@ -102,8 +103,7 @@ class RotiBrain:
             self.logger.warning("Generate AI Response responded with response code: %s", response.status_code)
             return None
         
-        # Sometimes the response isn't in the form I want, so there's a failsafe here in case.
-        return response.text
+        return response.json()['choices'][0]['message']['content'][:2000]
 
     # Grabs all text models available, should only be run once.
     def _get_text_models(self) -> Dict[str, TextModel]:

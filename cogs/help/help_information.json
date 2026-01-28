@@ -55,7 +55,7 @@
     }
   },
   "Music": {
-    "title": "Help for all of the music commands. This feature is currently **DISABLED** as of 01/10/2025.",
+    "title": "Help for all of the music commands.",
     "description": "Allows for Roti to play, pause, and queue music in a voice channel.",
     "command_base": "None",
     "emoji": ":notes:",
