@@ -31,10 +31,10 @@ class ImageModel:
 # capabilities.
 class RotiBrain:
     def __init__(self):
+        self.logger = logging.getLogger(__name__)
         self.behavior_prompt : str = _ROTI_BEHAVIOR_PROMPT
         self.text_models : Dict[str, TextModel] = self._get_text_models()
         self.image_models : List[ImageModel] = self._get_image_models()
-        self.logger = logging.getLogger(__name__)
 
     # Generates an image with a given query.
     @statistic(display_name="Generate Image", category="Generate")
