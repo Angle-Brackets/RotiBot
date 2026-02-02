@@ -1,11 +1,11 @@
 import time
 import discord 
 
+from supabase import acreate_client, AsyncClient
+from datetime import date
+from dataclasses import dataclass, fields, field, asdict
 from utils.Singleton import Singleton
-from pymongo import MongoClient
-from enum import Enum
-from copy import deepcopy
-from typing import Dict, Any, Optional, Tuple, Unpack
+from typing import Dict, Any, List, Optional, Tuple, Unpack, Dict, Type, TypeVar
 from returns.result import Result, Success, Failure
 from returns.maybe import Maybe, Some, Nothing
 from database.bot_state import RotiState
@@ -16,36 +16,6 @@ import asyncio
 import threading
 
 """
-This is the structure of the data that is stored in both MongoDB and 
-locally in memory. If they differ, then any fields stored here that are not
-stored remotely are automatically populated and copied to the remote for parity.
-"""
-_SCHEMA = {
-    "server_id": -1,
-    "banned_phrases": [], # Unused.
-    "trigger_phrases": [], # Parallel Array to "response_phrases" that stores index-by-index what set of triggers maps to what set of responses.
-    "response_phrases": [], # Vice versa of above.
-    "quotes": [], # Quote information stored as an N-tuple defined in the quotes.py class.
-    "motd": "", # Message of the Day for the server that Roti cycles through
-    "music_queue": [],  # Unused, all music queues are in memory.
-    "settings": {
-        "talkback": {
-            "enabled": True,  # Whether talkbacks are enabled
-            "duration": 0,  # How long the message exists before being deleted, 0 is permanent.
-            "strict": False, # Dictates if Roti will only look at substrings when responding, or will need EXACT matches of words to respond. (case ignored in both)
-            "res_probability": 100,  # Probability that Roti will respond to a talkback
-            "ai_probability": 5, # Probability that Roti will respond with an AI talkback.
-        },
-        "music": {
-            "looped": False,  # Unused
-            "speed": 100,  # Speed of songs, x1 - x2 speed.
-            "volume": 100, #Base volume of Roti while playing music, percentage of 0 - 100%.
-            "pitch": 100 # Pitch of the music, x0 to x5.
-        }
-    }
-}
-
-"""
 Data types and Wrapper classes
 """
 class DatabaseError(Exception):
@@ -53,218 +23,496 @@ class DatabaseError(Exception):
         super().__init__(reason)
         self.reason = reason
 
-KeyType = Tuple[int, str, Unpack[Tuple[str, ...]]]
-DatabaseRequest = Tuple[KeyType, Any, Future]
+T = TypeVar('T')
+
+"""
+Database Schemas
+Effectively the first argument is always the primary key of the table and the remaining are the column values
+Most things have a default value, if they don't, it's usually integral to the function of the action.
+"""
+
+@dataclass
+class TalkbackSettings:
+    """Talkback settings for a server."""
+    __tablename__ = "TalkbackSettings"
+    server_id : int = field(metadata={"primary": True})
+    enabled: bool = True
+    duration: int = 0
+    strict: bool = False
+    res_probability: int = 100
+    ai_probability: int = 5
+
+
+@dataclass
+class MusicSettings:
+    """Music settings for a server."""
+    __tablename__ = "MusicSettings"
+    server_id : int = field(metadata={"primary": True})
+    looped: bool = False
+    speed: int = 100
+    volume: int = 100
+    pitch: int = 100
+
+@dataclass
+class Quotes:
+    """Quotes table"""
+    __tablename__ = "Quotes"
+    id: int = field(metadata={"primary": True})
+    server_id : int
+    tag : str
+    quote : str
+    default : str = "None"
+    name : str = "None"
+    replaceable : bool = False
+    has_original : bool = False
+
+@dataclass
+class Motd:
+    """MOTD Table"""
+    __tablename__ = "Motd"
+    server_id : int = field(metadata={"primary": True})
+    motd : str = None
+
+@dataclass
+class Talkbacks:
+    """
+    Talkback Table - Mostly for reference. \\
+    This relies on a support table called 'talkback_triggers' that employs a layer of indirection to optimize talkback matching.
+    For more info, checkout the TalkbackDriver class in `talkbacks.py`.
+    """
+    __tablename__ = "talkbacks"
+    id : int = field(metadata={"primary": True})
+    server_id : int
+    responses : List[str]
+    created_at : date
 
 class RotiDatabase(metaclass=Singleton):
+    """
+    Generic Supabase database with type-safe dataclass-based operations.
+    No in-memory cache (for now :P) - all operations go directly to Supabase.
+    
+    Usage Examples:
+        # Read (async required)
+        settings = await db.select(TalkbackSettings, server_id=12345)
+        # Returns: TalkbackSettings(server_id=12345, enabled=True, ...)
+        
+        # Update with dataclass instance (queued, non-blocking)
+        settings.enabled = False
+        future = db.update(settings)
+        
+        # Update with kwargs (queued, non-blocking)
+        db.update(TalkbackSettings, server_id=12345, enabled=False, duration=60)
+        
+        # Update with await (blocking)
+        await db.update(TalkbackSettings, server_id=12345, enabled=False, _sync=True)
+        
+        # Insert new record
+        await db.insert(TalkbackSettings(server_id=12345))
+        
+        # Delete record
+        await db.delete(TalkbackSettings, server_id=12345)
+        
+        # List all (with filters)
+        quotes = await db.select_all(Quote, server_id=12345)
+        # Returns: List[Quote]
+    """
+    
+
+    """
+    This is a list of the tables in the supabase database. If you don't add a table here, it won't be registered.
+    """
+    TABLES = [TalkbackSettings, MusicSettings, Quotes, Motd, Talkbacks]
+
     def __init__(self):
         self.state = RotiState()
-        self._database_url = self.state.credentials.database_url
         self.logger = logging.getLogger(__name__)
-        self._cluster : MongoClient = MongoClient(self._database_url)
-        self._collections = self._cluster["Roti"]["data"]
-        self._db : Dict[int, Dict[str, Any]] = dict() # Used for quick access to the data, but changes need to be pushed!
-
-        # Initialize database.
-        start = time.perf_counter()
+        self.supabase: Optional[AsyncClient] = None
+        self.PRIMARY_KEYS = self._get_primary_keys()
+    
+    async def initialize(self):
+        """
+        Initializes the Supabase client on the event loop.
+        """
         self.logger.info("Initializing Database...")
-        self._download_database()
+        start = time.perf_counter()
+        
+        # Initialize client on the current running loop
+        self.supabase = await acreate_client(
+            supabase_url=self.state.credentials.database_url, 
+            supabase_key=self.state.credentials.database_pass
+        )
+        
         self.logger.info(f"Database Initialized in {round(1000*(time.perf_counter() - start), 2)}ms")
 
-        # Initialize Database Request Queue
-        start = time.perf_counter()
-        self.logger.info("Initializing Database Request Queue...")
-        self._database_active = True
-        self._loop = asyncio.new_event_loop()
-        self._requests : asyncio.Queue[DatabaseRequest] = asyncio.Queue()
-        self._worker_thread = threading.Thread(target=self._run_request_event_loop, name="Database Request Daemon", daemon=True)
-        self._worker_thread.start()
-        asyncio.run_coroutine_threadsafe(coro=self._process_requests(), loop=self._loop)
-        self.logger.info(f"Database Request Queue Initialized in {round(1000*(time.perf_counter() - start), 2)}ms")
 
-
-    def __contains__(self, value):
-        return value in self._db
-
-    def __getitem__(self, keys : Tuple[int, str, Unpack[Tuple[str, ...]]]) -> Result[Any, DatabaseError]:
-        return self._get_nested(keys)
-
-    def __setitem__(self, keys : Tuple[int, str, Unpack[Tuple[str, ...]]], value : Any) -> Future:
-        """
-        Sets a value in the database asynchronously.
-        
-        Returns a Future that will be resolved when the database operation completes.
-        You can await this Future to wait for the operation to complete, or ignore it
-        to let it run in the background.
-        
-        Example usage:
-            # Non-blocking usage
-            db[(server_id, "settings", "talkback", "enabled")] = True
-            
-            # Blocking usage (wait for operation to complete)
-            future = db[(server_id, "settings", "talkback", "enabled")] = True
-            await future
-        """
-        # Update the in-memory database immediately
-        self._set_nested(keys, value)
-        future = Future()
-
-        # In testing modes, we don't want to actually perform any database changes unless its in the test guild.
-        if not self.state.args.test or keys[0] == TEST_GUILD:
-            self._loop.call_soon_threadsafe(self._requests.put_nowait, (keys, value, future))
-        return future
+    # ========================================================================
+    # LIFECYCLE METHODS
+    # ========================================================================
     
-    async def shutdown(self):
-        """Gracefully shut down the database worker"""
-        self.logger.info("Shutting down database worker...")
-        self._database_active = False
-        
-        # Wait for all queued operations to complete
-        if not self._requests.empty():
-            self.logger.info(f"Waiting for {self._requests.qsize()} pending database operations to complete...")
-            await self._requests.join()
-            
-        self._loop.call_soon_threadsafe(self._loop.stop)
-        self._worker_thread.join(timeout=5.0)
-        self.logger.info("Database worker shutdown complete")
-
-    def _run_request_event_loop(self):
+    def _run_write_loop(self):
+        """Run the event loop for the write worker thread."""
         asyncio.set_event_loop(self._loop)
         self._loop.run_forever()
     
-    async def _process_requests(self):
-        """
-        Continuously process database requests in order.
-        """
-        self.logger.info("Database request processor started")
-        while self._database_active or not self._requests.empty():
+    async def _process_writes(self):
+        """Process queued database writes."""
+        self.logger.info("Database write processor started")
+        while self._database_active or not self._write_queue.empty():
             try:
-                keys, value, future = await self._requests.get()
-                self.logger.debug(f"Processing database write: {keys}, {value}")
+                write_func, future = await self._write_queue.get()
                 try:
-                    match await self._write_to_database(keys, value):
-                        case Success(_):
-                            print(f"Successfully wrote to Database with keys: {keys} and value: {value}")
-                        case Failure(DatabaseError() as error):
-                            print(f"Failed to write to database with keys: {keys} and value: {value}\n" + error)
-                            future.set_exception(error)
+                    result = await write_func()
+                    future.set_result(result)
+                    self.logger.debug(f"Write completed successfully")
                 except Exception as e:
-                    self.logger.error(f"Exception during database write: {str(e)}", exc_info=True)
+                    self.logger.error(f"Write operation failed: {e}", exc_info=True)
                     future.set_exception(e)
-                self._requests.task_done()
-
+                finally:
+                    self._write_queue.task_done()
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self.logger.error(f"Unexpected error in request processor: {str(e)}", exc_info=True)
-            
-    """
-    Reads from the in-memory db, indexing with the variable amount of keys provided.
-    The first value is always the server id, the second is always some key, after that there
-    can be a variable number of keys that are always strings.
-    """
-    def _get_nested(self, keys : Tuple[int, str, Unpack[Tuple[str, ...]]]) -> Result[Any, DatabaseError]:
-        try:
-            data = self._db
-            for key in keys:
-                data = data[key]
-        except KeyError as ke:
-            return Failure(DatabaseError(f"KeyError: {ke} not found in database."))
-        except TypeError as te:
-            return Failure(DatabaseError(f"Invalid key path: {keys}"))
+                self.logger.error(f"Unexpected error in write processor: {e}", exc_info=True)
+    
+    async def shutdown(self):
+        """Gracefully shut down the database worker."""
+        self.logger.info("Shutting down database worker...")
+        self._database_active = False
         
-        return Success(data)
-    
-    """
-    Writes to the in-memory db, indexing with the variable amount of keys provided.
-    The first value is always the server id, the second is always some key, after that there
-    can be a variable number of keys that are always strings.
-    """
-    def _set_nested(self, keys : Tuple[int, str, Unpack[Tuple[str, ...]]], value : Any) -> Result[None, DatabaseError]:
-        try:
-            data = self._db
-            key_to_change = keys[-1]
-            for key in keys[:-1]:
-                data = data[key]
-            
-            if not isinstance(value, type(data[key_to_change])):
-                return Failure(DatabaseError(f"Source and destination type of value do not match. Expected: {type(data[key_to_change])}, got: {type(value)}."))
-            data[key_to_change] = value
-        except TypeError:
-            return Failure(DatabaseError(f"Invalid key path! Keys: {keys}"))
-        return Success(None)
-    
-    """
-    Recursively ensures all keys in `reference` exist in `target`.
-    If a key is missing, it will be initialized with the default value from `reference`.
-    """
-    def _recursive_dict_copy(self, target : dict, reference : dict) -> None:
-        for key, default_value in reference.items():
-            if key not in target:
-                target[key] = deepcopy(default_value)
-            elif isinstance(default_value, dict):
-                # Recurse!
-                self._recursive_dict_copy(target[key], default_value)
-    
-    """
-    Downloads the database into memory.
-    """
-    def _download_database(self) -> None:
-        # Takes data, puts into variable named db and keys the data using the serverID
-        # To get a server's data, you need to do db[<server_id>][<category>] (ID IS A INTEGER!)
-        for data in self._collections.find({}):
-            self._db[data['server_id']] = data
-            # TODO: Reapply this 
-            #self._recursive_dict_copy(self._db[data['server_id']], _SCHEMA)
-
-    def update_database(self, guild : discord.Guild) -> str:
-        serverID = guild.id
-
-        if serverID not in self._db.keys():
-            temp = _SCHEMA
-            temp['server_id'] = serverID
-            self._collections.insert_one(temp)
-            self._db[serverID] = temp
-            return f"Successfully created database entry for {guild.name}. Have fun!"
-    
-    def delete_guild_entry(self, server_id : int) -> Maybe[DatabaseError]:
-        if not server_id in self._db:
-            return Some(DatabaseError(f"Server with ID: {server_id} does not exist."))
+        if not self._write_queue.empty():
+            self.logger.info(f"Waiting for {self._write_queue.qsize()} pending writes...")
+            await self._write_queue.join()
         
-        self._collections.delete_one({"server_id": server_id})
-        self._db[server_id].clear()
-        return Nothing
+        self._loop.call_soon_threadsafe(self._loop.stop)
+        self._worker_thread.join(timeout=5.0)
+        self.logger.info("Database worker shutdown complete")
     
-    async def _write_to_database(self, keys: Tuple[int, str, Unpack[Tuple[str, ...]]], value: Any) -> Result[None, DatabaseError]:
-        """Performs the actual database write operation"""
+
+    # ========================================================================
+    # HELPER METHODS
+    # ========================================================================
+    def _get_primary_keys(self) -> Dict[Type, str]:
+        """
+        Generates the primary keys from the given TABLE_NAMES
+        """
+        mapping = {}
+        for table in self.TABLES:
+            mapping[table] = self._get_primary_key(table)
+        
+        return mapping
+
+    def _get_table_name(self, cls: Type) -> str:
+        """Get table name for a dataclass type."""
+        return getattr(cls, "__tablename__", cls.__name__)
+    
+    def _get_primary_key(self, cls: Type) -> str:
+        """Get primary key field name for a dataclass type."""
+        for field in fields(cls):
+            if field.metadata.get("primary"):
+                return field.name
+        return "id" # Fallback default
+
+    def _dataclass_to_dict(self, obj: Any) -> Dict[str, Any]:
+        """Convert dataclass to dict, excluding None values and primary key if auto-generated."""
+        data = asdict(obj)
+        # Remove None values
+        return {k: v for k, v in data.items() if v is not None}
+    
+    def _dict_to_dataclass(self, dataclass_type: Type[T], data: Dict[str, Any]) -> T:
+        """Convert dict to dataclass instance."""
+        # Get field names from dataclass
+        field_names = {f.name for f in fields(dataclass_type)}
+        # Filter dict to only include fields that exist in dataclass
+        filtered_data = {k: v for k, v in data.items() if k in field_names}
+        return dataclass_type(**filtered_data)
+    
+    # ========================================================================
+    # CORE OPERATIONS
+    # ========================================================================
+    
+    async def select(
+        self,
+        dataclass_type: Type[T],
+        **primary_key_kwargs
+    ) -> Optional[T]:
+        """
+        Select a single record by primary key.
+        
+        Args:
+            dataclass_type: The dataclass type (e.g., TalkbackSettings)
+            **primary_key_kwargs: Primary key value(s) (e.g., server_id=12345)
+            
+        Returns:
+            Dataclass instance or None if not found
+            
+        Example:
+            settings = await db.select(TalkbackSettings, server_id=12345)
+        """
         try:
-            server_id = keys[0]
-            if server_id not in self._db:
-                return Failure(DatabaseError(f"Invalid server_id passed: {server_id}"))
+            table_name = self._get_table_name(dataclass_type)
             
-            # Create the MongoDB update path (e.g., "settings.talkback.enabled")
-            key_path = ".".join(keys[1:])
+            # Build query with primary key filter
+            query = self.supabase.table(table_name).select('*')
+            for key, value in primary_key_kwargs.items():
+                query = query.eq(key, value)
             
-            # Update the MongoDB database
-            result = await asyncio.to_thread(
-                self._collections.update_one,
-                {"server_id": server_id},
-                {"$set": {key_path: value}}
-            )
+            result = await query.single().execute()
             
-            if result.modified_count == 0 and result.matched_count == 0:
-                return Failure(DatabaseError(f"No document found for server_id: {server_id}"))
-                
-            return Success(None)
-        except ConnectionError as ce:
-            return Failure(DatabaseError(f"Unable to connect to database: {ce}"))
+            if not result.data:
+                return None
+            
+            return self._dict_to_dataclass(dataclass_type, result.data)
+            
         except Exception as e:
-            return Failure(DatabaseError(f"An exception occurred writing to the database: {e}"))
-    
-    def read_data(self, keys : Tuple[int, str, Unpack[Tuple[str, ...]]]) -> Result[Any, DatabaseError]:
-        return self._get_nested(keys)
+            self.logger.error(f"Failed to select {dataclass_type.__name__}: {e}")
+            return None
+            
+    async def select_all(
+        self,
+        dataclass_type: Type[T],
+        **filter_kwargs
+    ) -> List[T]:
+        """
+        Select multiple records with optional filters.
+        
+        Args:
+            dataclass_type: The dataclass type
+            **filter_kwargs: Filter conditions (e.g., server_id=12345)
+            
+        Returns:
+            List of dataclass instances
+            
+        Example:
+            quotes = await db.select_all(Quote, server_id=12345)
+        """
+        try:
+            table_name = self._get_table_name(dataclass_type)
+            
+            # Build query with filters
+            query = self.supabase.table(table_name).select('*')
+            for key, value in filter_kwargs.items():
+                query = query.eq(key, value)
+            
+            result = await query.execute()
+            
+            if not result.data:
+                return []
+            
+            return [self._dict_to_dataclass(dataclass_type, row) for row in result.data]
+            
+        except Exception as e:
+            self.logger.error(f"Failed to select all {dataclass_type.__name__}: {e}")
+            return []
 
-# Global used in the music.py file for /filter's modal
-FilterParams = Enum("DistortionType", ["TREMOLO", "VIBRATO", "ROTATION", "DISTORTION"])
+    async def insert(self, obj: T, _sync: bool = True) -> Result[T, DatabaseError]:
+        """
+        Insert a new record.
+        
+        Args:
+            obj: Dataclass instance to insert
+            _sync: Whether to execute synchronously (default True)
+            
+        Returns:
+            Result with inserted object or error
+            
+        Example:
+            await db.insert(TalkbackSettings(server_id=12345))
+        """
+        try:
+            dataclass_type = type(obj)
+            server_id = getattr(obj, 'server_id', None)
+            table_name = self._get_table_name(dataclass_type)
+            data = self._dataclass_to_dict(obj)
+            
+            result = await self.supabase.table(table_name).insert(data).execute()
+
+            if self.state.args.test and server_id != TEST_GUILD:
+                self.logger.info(f"Test Mode: Blocking insert for server {server_id}")
+                return Success(obj)
+            
+            if not result.data:
+                return Failure(DatabaseError("Insert failed - no data returned"))
+            
+            return Success(self._dict_to_dataclass(dataclass_type, result.data[0]))
+            
+        except Exception as e:
+            self.logger.error(f"Failed to insert {dataclass_type.__name__}: {e}")
+            return Failure(DatabaseError(f"Insert failed: {e}"))
+    
+    def update(self, obj_or_type, _sync: bool = False, **kwargs) -> asyncio.Task:
+        """
+        Update a record (fire-and-forget by default).
+        
+        Args:
+            obj_or_type: Either a dataclass instance or a dataclass type
+            _sync: Whether to wait for completion (default False)
+            **kwargs: If obj_or_type is a type, provide update values here
+        """
+        
+        async def _perform_update():
+            try:
+                # 1. Check if passed a CLASS (Type)
+                pk_value = None
+                if isinstance(obj_or_type, type):
+                    dataclass_type = obj_or_type
+                    table_name = self._get_table_name(dataclass_type)
+                    primary_key = self._get_primary_key(dataclass_type)
+                    
+                    if primary_key not in kwargs:
+                        raise DatabaseError(f"Primary key '{primary_key}' not provided")
+                    
+                    pk_value = kwargs[primary_key]
+                    server_id = pk_value if primary_key == "server_id" else kwargs.get("server_id")
+
+                    update_data = {k: v for k, v in kwargs.items() if k not in [primary_key, '_sync']}
+                # 2. Check if passed an INSTANCE
+                else:
+                    dataclass_type = type(obj_or_type)
+                    primary_key = self._get_primary_key(dataclass_type)
+                    
+                    pk_value = getattr(obj_or_type, primary_key)
+                    server_id = getattr(obj_or_type, 'server_id', pk_value if primary_key == "server_id" else None)
+                    
+                    data = self._dataclass_to_dict(obj_or_type)
+                    update_data = {k: v for k, v in data.items() if k != primary_key}
+
+                # Skip writes in test mode unless it's the test guild
+                target_id = server_id if server_id is not None else pk_value
+
+                if self.state.args.test and server_id != TEST_GUILD:
+                    self.logger.info(f"Test mode: Skipping write to ID {target_id}")
+                    return Success(None)
+                
+                if self.supabase is None:
+                    raise RuntimeError("Database not initialized. Call await db.initialize()")
+
+                await self.supabase.table(table_name)\
+                    .update(update_data)\
+                    .eq(primary_key, pk_value)\
+                    .execute()
+                
+                return Success(None)
+                
+            except Exception as e:
+                self.logger.error(f"Failed to update: {e}", exc_info=True)
+                return Failure(DatabaseError(f"Update failed: {e}"))
+
+        # Create task on current loop
+        task = asyncio.create_task(_perform_update())
+
+        if _sync:
+            # If user wants to await it, we return the task (which is awaitable)
+            return task
+        
+        # If fire-and-forget, add a logger callback so errors aren't silent
+        def _log_error(t):
+            try:
+                t.result()
+            except Exception as e:
+                self.logger.error(f"Background update task failed: {e}")
+        
+        task.add_done_callback(_log_error)
+        return task
+
+    async def delete(
+        self,
+        dataclass_type: Type[T],
+        **primary_key_kwargs
+    ) -> Result[None, DatabaseError]:
+        """
+        Delete a record by primary key.
+        
+        Args:
+            dataclass_type: The dataclass type
+            **primary_key_kwargs: Primary key value(s)
+            
+        Returns:
+            Success or Failure
+            
+        Example:
+            await db.delete(TalkbackSettings, server_id=12345)
+        """
+        try:
+            table_name = self._get_table_name(dataclass_type)
+            
+            # Build delete query
+            query = self.supabase.table(table_name).delete()
+            for key, value in primary_key_kwargs.items():
+                query = query.eq(key, value)
+            
+            await query.execute()
+            
+            return Success(None)
+            
+        except Exception as e:
+            self.logger.error(f"Failed to delete {dataclass_type.__name__}: {e}")
+            return Failure(DatabaseError(f"Delete failed: {e}"))
+    
+    # ========================================================================
+    # SERVER INITIALIZATION
+    # ========================================================================
+
+    async def initialize_server(self, guild: discord.Guild) -> Result[str, DatabaseError]:
+        """
+        Initialize a new server with default settings.
+        
+        Args:
+            guild: Discord guild object
+            
+        Returns:
+            Success with message or Failure with error
+        """
+        server_id = guild.id
+        
+        try:
+            # Check if server already exists
+            existing = await self.select(TalkbackSettings, server_id=server_id)
+            if existing:
+                return Failure(DatabaseError(f"Server {guild.name} already initialized"))
+            
+            # Insert server config (for MOTD)
+            await self.insert(Motd(server_id=server_id, motd=""))
+            
+            # Insert talkback settings
+            await self.insert(TalkbackSettings(server_id=server_id))
+            
+            # Insert music settings
+            await self.insert(MusicSettings(server_id=server_id))
+            
+            self.logger.info(f"Initialized server: {guild.name} ({server_id})")
+            return Success(f"Successfully created database entry for {guild.name}. Have fun!")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to initialize server {guild.name}: {e}", exc_info=True)
+            return Failure(DatabaseError(f"Failed to initialize server: {e}"))
+    
+    async def delete_server(self, server_id: int) -> Maybe[DatabaseError]:
+        """
+        Delete a server and all its data (cascades).
+        
+        Args:
+            server_id: Discord server ID
+            
+        Returns:
+            Nothing on success, Some(DatabaseError) on failure
+        """
+        try:
+            # Delete server config (cascades to settings via foreign keys)
+            result = await self.delete(Motd, server_id=server_id)
+            
+            if isinstance(result, Failure):
+                return Some(result.failure())
+            
+            self.logger.info(f"Deleted server: {server_id}")
+            return Nothing
+            
+        except Exception as e:
+            self.logger.error(f"Failed to delete server {server_id}: {e}", exc_info=True)
+            return Some(DatabaseError(f"Failed to delete server: {e}"))
+    
+    async def server_exists(self, server_id: int) -> bool:
+        """Check if a server exists in the database."""
+        result = await self.select(TalkbackSettings, server_id=server_id)
+        return result is not None
 
 

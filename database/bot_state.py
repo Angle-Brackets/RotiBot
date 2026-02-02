@@ -46,6 +46,7 @@ class BotCredentials(metaclass=Singleton):
     def __init__(self):
         load_dotenv(".env", override=True) # Load credentials
         self.__dict__["database_url"] = os.getenv("DATABASE")
+        self.__dict__["database_pass"] = os.getenv("DATABASE_PASS")
         self.__dict__["token"] = os.getenv("TOKEN")
         self.__dict__["test_token"] = os.getenv("TEST_TOKEN")
         self.__dict__["music_pass"] = os.getenv("MUSIC_PASS")
