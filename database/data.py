@@ -5,15 +5,13 @@ from supabase import acreate_client, AsyncClient
 from datetime import date
 from dataclasses import dataclass, fields, field, asdict
 from utils.Singleton import Singleton
-from typing import Dict, Any, List, Optional, Tuple, Unpack, Dict, Type, TypeVar
+from typing import Dict, Any, List, Optional, Dict, Type, TypeVar
 from returns.result import Result, Success, Failure
 from returns.maybe import Maybe, Some, Nothing
 from database.bot_state import RotiState
 from utils.RotiUtilities import TEST_GUILD
-from concurrent.futures import Future
 import logging
 import asyncio
-import threading
 
 """
 Data types and Wrapper classes
@@ -127,6 +125,7 @@ class RotiDatabase(metaclass=Singleton):
         self.state = RotiState()
         self.logger = logging.getLogger(__name__)
         self.supabase: Optional[AsyncClient] = None
+        self._background_tasks = set() # Currently enqueued tasks
         self.PRIMARY_KEYS = self._get_primary_keys()
     
     async def initialize(self):
@@ -149,43 +148,21 @@ class RotiDatabase(metaclass=Singleton):
     # LIFECYCLE METHODS
     # ========================================================================
     
-    def _run_write_loop(self):
-        """Run the event loop for the write worker thread."""
-        asyncio.set_event_loop(self._loop)
-        self._loop.run_forever()
-    
-    async def _process_writes(self):
-        """Process queued database writes."""
-        self.logger.info("Database write processor started")
-        while self._database_active or not self._write_queue.empty():
-            try:
-                write_func, future = await self._write_queue.get()
-                try:
-                    result = await write_func()
-                    future.set_result(result)
-                    self.logger.debug(f"Write completed successfully")
-                except Exception as e:
-                    self.logger.error(f"Write operation failed: {e}", exc_info=True)
-                    future.set_exception(e)
-                finally:
-                    self._write_queue.task_done()
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                self.logger.error(f"Unexpected error in write processor: {e}", exc_info=True)
-    
     async def shutdown(self):
-        """Gracefully shut down the database worker."""
-        self.logger.info("Shutting down database worker...")
-        self._database_active = False
+        """Gracefully shut down the database client and finish background tasks."""
+        self.logger.info("Shutting down database...")
         
-        if not self._write_queue.empty():
-            self.logger.info(f"Waiting for {self._write_queue.qsize()} pending writes...")
-            await self._write_queue.join()
-        
-        self._loop.call_soon_threadsafe(self._loop.stop)
-        self._worker_thread.join(timeout=5.0)
-        self.logger.info("Database worker shutdown complete")
+        # Wait for all background tasks to finish
+        if self._background_tasks:
+            self.logger.info(f"Waiting for {len(self._background_tasks)} pending writes...")
+            await asyncio.gather(*self._background_tasks, return_exceptions=True)
+            self.logger.info("All pending writes completed.")
+
+        if self.supabase:
+            await self.supabase.auth.sign_out() 
+            self.supabase = None
+
+        self.logger.info("Database shutdown complete.")
     
 
     # ========================================================================
@@ -256,11 +233,14 @@ class RotiDatabase(metaclass=Singleton):
             for key, value in primary_key_kwargs.items():
                 query = query.eq(key, value)
             
+            start = time.perf_counter()
             result = await query.single().execute()
-            
+            delta = 1000 * (time.perf_counter() - start)
+
             if not result.data:
                 return None
             
+            self.logger.info(f"Single SELECT took {delta:.2f}ms")
             return self._dict_to_dataclass(dataclass_type, result.data)
             
         except Exception as e:
@@ -293,11 +273,14 @@ class RotiDatabase(metaclass=Singleton):
             for key, value in filter_kwargs.items():
                 query = query.eq(key, value)
             
+            start = time.perf_counter()
             result = await query.execute()
+            delta = 1000 * (time.perf_counter() - start)
             
             if not result.data:
                 return []
             
+            self.logger.info(f"Multi SELECT took {delta:.2f}ms")
             return [self._dict_to_dataclass(dataclass_type, row) for row in result.data]
             
         except Exception as e:
@@ -324,7 +307,9 @@ class RotiDatabase(metaclass=Singleton):
             table_name = self._get_table_name(dataclass_type)
             data = self._dataclass_to_dict(obj)
             
+            start = time.perf_counter()
             result = await self.supabase.table(table_name).insert(data).execute()
+            delta = 1000*(time.perf_counter() - start)
 
             if self.state.args.test and server_id != TEST_GUILD:
                 self.logger.info(f"Test Mode: Blocking insert for server {server_id}")
@@ -333,6 +318,7 @@ class RotiDatabase(metaclass=Singleton):
             if not result.data:
                 return Failure(DatabaseError("Insert failed - no data returned"))
             
+            self.logger.info(f"Single INSERT took {delta:.2f}ms")
             return Success(self._dict_to_dataclass(dataclass_type, result.data[0]))
             
         except Exception as e:
@@ -386,10 +372,13 @@ class RotiDatabase(metaclass=Singleton):
                 if self.supabase is None:
                     raise RuntimeError("Database not initialized. Call await db.initialize()")
 
+                start = time.perf_counter()
                 await self.supabase.table(table_name)\
                     .update(update_data)\
                     .eq(primary_key, pk_value)\
                     .execute()
+                delta = 1000 * (time.perf_counter() - start)
+                self.logger.info(f"Single UPDATE took {delta:.2f}ms")
                 
                 return Success(None)
                 
@@ -399,6 +388,8 @@ class RotiDatabase(metaclass=Singleton):
 
         # Create task on current loop
         task = asyncio.create_task(_perform_update())
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
 
         if _sync:
             # If user wants to await it, we return the task (which is awaitable)
@@ -512,6 +503,7 @@ class RotiDatabase(metaclass=Singleton):
     
     async def server_exists(self, server_id: int) -> bool:
         """Check if a server exists in the database."""
+        # TODO: Maybe add a server metadata table for stuff like this?
         result = await self.select(TalkbackSettings, server_id=server_id)
         return result is not None
 

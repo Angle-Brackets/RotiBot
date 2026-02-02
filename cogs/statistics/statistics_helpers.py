@@ -1,7 +1,6 @@
 import time
 import functools
 import asyncio
-import discord
 from discord.ext import commands
 from collections import defaultdict, namedtuple
 from typing import Callable, Optional, List, NamedTuple
