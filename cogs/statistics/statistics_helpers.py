@@ -5,7 +5,7 @@ from discord.ext import commands
 from collections import defaultdict, namedtuple
 from typing import Callable, Optional, List, NamedTuple
 from dataclasses import dataclass, field
-from database.data import RotiDatabase
+from database.data import RotiDatabase, TalkbackTriggers, Quotes
 
 @dataclass(slots=True, kw_only=True, frozen=True)
 class FunctionInfo:
@@ -111,88 +111,108 @@ def statistic(display_name: Optional[str] = None, category : Optional[str] = Non
     return decorator
 
 def ttl_cache(ttl: int):
-    """
-    This decorator caches the results of a method for an amount of seconds described by the ttl.
-    Attributes:
-        ttl (int) : The amount of seconds to invalidate the cache after.
-    """
     def decorator(func: Callable):
         cache = {}
-        
+
+        def get_cache_key(*args, **kwargs):
+            # Convert mutable lists in args to immutable tuples so they are hashable
+            hashable_args = tuple(
+                tuple(arg) if isinstance(arg, list) else arg 
+                for arg in args
+            )
+            return (func.__name__, hashable_args, frozenset(kwargs.items()))
+
+        # --- ASYNC WRAPPER ---
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            # Create a key from the function's arguments
-            cache_key = func.__name__
+        async def async_wrapper(*args, **kwargs):
+            try:
+                cache_key = get_cache_key(*args, **kwargs)
+            except TypeError:
+                return await func(*args, **kwargs)
+
             current_time = time.monotonic()
-
-            # If the result is cached and valid (within N seconds), return it
             if cache_key in cache:
-                cached_value, timestamp = cache[cache_key]
+                val, timestamp = cache[cache_key]
                 if current_time - timestamp <= ttl:
-                    return cached_value
+                    return val
 
-            # Otherwise, compute the result and cache it
+            result = await func(*args, **kwargs)
+            cache[cache_key] = (result, current_time)
+            return result
+
+        # --- SYNC WRAPPER ---
+        @functools.wraps(func)
+        def sync_wrapper(*args, **kwargs):
+            try:
+                cache_key = get_cache_key(*args, **kwargs)
+            except TypeError:
+                return func(*args, **kwargs)
+
+            current_time = time.monotonic()
+            if cache_key in cache:
+                val, timestamp = cache[cache_key]
+                if current_time - timestamp <= ttl:
+                    return val
+
             result = func(*args, **kwargs)
             cache[cache_key] = (result, current_time)
             return result
 
-        return wrapper
+        if asyncio.iscoroutinefunction(func):
+            return async_wrapper
+        return sync_wrapper
+
     return decorator
 
 def get_perf_statistics():
     return _statistics
 
-def get_usage_statistics(db : RotiDatabase, guild_ids : List[int]) -> RotiUsage:
+@ttl_cache(ttl=300)
+async def get_usage_statistics(db : RotiDatabase) -> RotiUsage:
+    talkbacks = await _calculate_talkback_count(db)
+    quotes = await _calculate_quote_usage(db)
     return RotiUsage(
-        talkback_usage=_calculate_talkback_count(db, guild_ids),
-        quote_usage=_calculate_quote_usage(db, guild_ids)
+        talkback_usage=talkbacks,
+        quote_usage=quotes
     )
 
-def get_population(bot : commands.Bot, db : RotiDatabase, guild_ids : List[int]) -> RotiPopulation:
-    return _calculate_population(bot, db, guild_ids)
+def get_population(bot : commands.Bot, guild_ids : List[int]) -> RotiPopulation:
+    return _calculate_population(bot, guild_ids)
 
-@ttl_cache(ttl=300)
-def _calculate_talkback_count(db: RotiDatabase, guild_ids: List[int]) -> TalkbackUsage:
+async def _calculate_talkback_count(db: RotiDatabase) -> TalkbackUsage:
     """
     This is a cached function to calculate the number of talkbacks present across all servers.
     """
-    trigger_count = 0
-    response_count = 0
+    trigger_count = await db.count(TalkbackTriggers)
+    response_count = await db.raw_query(
+        """
+        SELECT SUM(array_length(responses, 1)) as total_responses
+        FROM talkbacks
+        """
+    )
 
-    for guild in guild_ids:
-        if guild in db:
-            trigger_count += sum(len(trigger_set) for trigger_set in db[guild, "trigger_phrases"].unwrap())
-            response_count += sum(len(response_set) for response_set in db[guild, "response_phrases"].unwrap())
+    response_count = response_count.unwrap()[0]["total_responses"]
     
     return TalkbackUsage(triggers=trigger_count, responses=response_count)
 
-@ttl_cache(ttl=300)
-def _calculate_quote_usage(db : RotiDatabase, guild_ids : List[int]) -> QuoteUsage:
+async def _calculate_quote_usage(db : RotiDatabase) -> QuoteUsage:
     """
     This is a cached function to calculate the number of quotes present across all servers, organized by type of quote.
     """
-    nonreplaceable = 0
-    replaceable = 0
+    nonreplaceable = await db.count(Quotes, replaceable=False)
+    replaceable = await db.count(Quotes, replaceable=True)
 
-    for guild in guild_ids:
-        if guild in db:
-            for quote in db[guild, "quotes"].unwrap():
-                nonreplaceable += int(not quote["replaceable"])
-                replaceable += int(quote["replaceable"])
-    
     return QuoteUsage(nonreplaceable=nonreplaceable, replaceable=replaceable)
 
 @ttl_cache(ttl=300)
-def _calculate_population(bot : commands.Bot, db : RotiDatabase, guild_ids : List[int]) -> RotiPopulation:
+def _calculate_population(bot : commands.Bot, guild_ids : List[int]) -> RotiPopulation:
     """
     This is a cached function to calculate the total population of servers that use Roti
-    Only counts servers where the db is defined (there are a few legacy "dead" servers that don't follow this trend)
     """
     total = 0
 
     for guild in guild_ids:
-        if guild in db:
-            total += bot.get_guild(guild).member_count
+        total += bot.get_guild(guild).member_count
     
     return RotiPopulation(servers=len(guild_ids), users=total)
 

@@ -84,6 +84,15 @@ class Talkbacks:
     responses : List[str]
     created_at : date
 
+@dataclass
+class TalkbackTriggers:
+    """
+    This is a SUPPORT for the Talkbacks table. DO NOT USE THIS FOR NORMAL QUERIES! Only for counting or very simple operations.
+    """
+    __tablename__ = "talkback_triggers"
+    talkback_id : int =  field(metadata={"primary": True})
+    trigger : str = field(metadata={"primary": True})
+
 class RotiDatabase(metaclass=Singleton):
     """
     Generic Supabase database with type-safe dataclass-based operations.
@@ -119,7 +128,7 @@ class RotiDatabase(metaclass=Singleton):
     """
     This is a list of the tables in the supabase database. If you don't add a table here, it won't be registered.
     """
-    TABLES = [TalkbackSettings, MusicSettings, Quotes, Motd, Talkbacks]
+    TABLES = [TalkbackSettings, MusicSettings, Quotes, Motd, Talkbacks, TalkbackTriggers]
 
     def __init__(self):
         self.state = RotiState()
@@ -404,6 +413,117 @@ class RotiDatabase(metaclass=Singleton):
         
         task.add_done_callback(_log_error)
         return task
+
+    async def count(
+        self,
+        dataclass_type: Type[T],
+        **filter_kwargs
+    ) -> int:
+        """
+        Count the number of rows in a table with optional filters.
+        
+        Args:
+            dataclass_type: The dataclass type
+            **filter_kwargs: Optional filter conditions (e.g., server_id=12345)
+            
+        Returns:
+            Number of rows matching the filter
+            
+        Examples:
+            # Count all quotes for a server
+            num_quotes = await db.count(Quotes, server_id=12345)
+            
+            # Count total talkback settings (all servers)
+            total_servers = await db.count(TalkbackSettings)
+            
+            # Count quotes with specific tag
+            funny_quotes = await db.count(Quotes, server_id=12345, tag="funny")
+        """
+        try:
+            table_name = self._get_table_name(dataclass_type)
+            
+            # Build query with filters
+            query = self.supabase.table(table_name).select('*', count='exact')
+            for key, value in filter_kwargs.items():
+                query = query.eq(key, value)
+            
+            # Limit to 0 rows since we only want the count
+            result = await query.limit(0).execute()
+            
+            # The count is in result.count
+            return result.count if result.count is not None else 0
+            
+        except Exception as e:
+            self.logger.error(f"Failed to count {dataclass_type.__name__}: {e}")
+            return 0
+
+    async def raw_query(
+        self,
+        query: str,
+    ) -> Result[List[Dict[str, Any]], DatabaseError]:
+        """
+        Execute a raw SQL query for one-off use cases.
+        
+        WARNING: Use with caution! No validation or protection against SQL injection.
+        Prefer using the type-safe methods (select, update, etc.) when possible.
+        
+        Args:
+            query: SQL query string (use $1, $2, etc. for parameters)
+            params: Optional dictionary of parameters for the query
+            
+        Returns:
+            Result containing list of rows as dicts, or error
+            
+        Examples:
+            # Simple query
+            result = await db.raw_query("SELECT * FROM TalkbackSettings WHERE enabled = true")
+            if isinstance(result, Success):
+                rows = result.unwrap()
+            
+            # Query with parameters (safer)
+            result = await db.raw_query(
+                "SELECT * FROM Quotes WHERE server_id = $1 AND tag = $2",
+                {"1": 12345, "2": "funny"}
+            )
+            
+            # Complex aggregation
+            result = await db.raw_query(
+                '''
+                SELECT server_id, COUNT(*) as quote_count 
+                FROM Quotes 
+                GROUP BY server_id 
+                HAVING COUNT(*) > 10
+                '''
+            )
+        """
+        try:
+            # Use Supabase RPC to execute raw SQL
+            # Note: This requires a PostgreSQL function in your database
+            # You'll need to create this function in Supabase:
+            #
+            # CREATE OR REPLACE FUNCTION execute_raw_sql(query text)
+            # RETURNS json
+            # LANGUAGE plpgsql
+            # SECURITY DEFINER
+            # AS $$
+            # DECLARE
+            #   result json;
+            # BEGIN
+            #   EXECUTE 'SELECT json_agg(row_to_json(t)) FROM (' || query || ') t' INTO result;
+            #   RETURN COALESCE(result, '[]'::json);
+            # END;
+            # $$;
+            
+            result = await self.supabase.rpc('execute_raw_sql', {'query': query}).execute()
+            
+            if result.data is None:
+                return Success([])
+            
+            return Success(result.data)
+            
+        except Exception as e:
+            self.logger.error(f"Raw query failed: {e}")
+            return Failure(DatabaseError(f"Raw query failed: {e}"))
 
     async def delete(
         self,
