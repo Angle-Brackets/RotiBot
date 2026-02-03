@@ -52,7 +52,7 @@ class MusicSettings:
     pitch: int = 100
 
 @dataclass
-class Quotes:
+class QuotesTable:
     """Quotes table"""
     __tablename__ = "Quotes"
     id: int = field(metadata={"primary": True})
@@ -65,14 +65,14 @@ class Quotes:
     has_original : bool = False
 
 @dataclass
-class Motd:
+class MotdTable:
     """MOTD Table"""
     __tablename__ = "Motd"
-    server_id : int = field(metadata={"primary": True})
+    user_id : int = field(metadata={"primary": True})
     motd : str = None
 
 @dataclass
-class Talkbacks:
+class TalkbacksTable:
     """
     Talkback Table - Mostly for reference. \\
     This relies on a support table called 'talkback_triggers' that employs a layer of indirection to optimize talkback matching.
@@ -85,7 +85,7 @@ class Talkbacks:
     created_at : date
 
 @dataclass
-class TalkbackTriggers:
+class TalkbackTriggersTable:
     """
     This is a SUPPORT for the Talkbacks table. DO NOT USE THIS FOR NORMAL QUERIES! Only for counting or very simple operations.
     """
@@ -128,7 +128,7 @@ class RotiDatabase(metaclass=Singleton):
     """
     This is a list of the tables in the supabase database. If you don't add a table here, it won't be registered.
     """
-    TABLES = [TalkbackSettings, MusicSettings, Quotes, Motd, Talkbacks, TalkbackTriggers]
+    TABLES = [TalkbackSettings, MusicSettings, QuotesTable, MotdTable, TalkbacksTable, TalkbackTriggersTable]
 
     def __init__(self):
         self.state = RotiState()
@@ -253,7 +253,7 @@ class RotiDatabase(metaclass=Singleton):
             return self._dict_to_dataclass(dataclass_type, result.data)
             
         except Exception as e:
-            self.logger.error(f"Failed to select {dataclass_type.__name__}: {e}")
+            self.logger.warning(f"Failed to select {dataclass_type.__name__}: {e}")
             return None
             
     async def select_all(
@@ -320,7 +320,7 @@ class RotiDatabase(metaclass=Singleton):
             result = await self.supabase.table(table_name).insert(data).execute()
             delta = 1000*(time.perf_counter() - start)
 
-            if self.state.args.test and server_id != TEST_GUILD:
+            if self.state.args.test and server_id and server_id != TEST_GUILD:
                 self.logger.info(f"Test Mode: Blocking insert for server {server_id}")
                 return Success(obj)
             
@@ -410,6 +410,103 @@ class RotiDatabase(metaclass=Singleton):
                 t.result()
             except Exception as e:
                 self.logger.error(f"Background update task failed: {e}")
+        
+        task.add_done_callback(_log_error)
+        return task
+
+    def upsert(self, obj_or_type, _sync: bool = False, **kwargs) -> asyncio.Task:
+        """
+        Upsert a record (Insert a new record or Update if the primary key exists).
+        
+        Args:
+            obj_or_type: Either a dataclass instance or a dataclass type.
+            _sync: Whether to wait for completion (default False).
+            **kwargs: If obj_or_type is a type, provide the column values here.
+            
+        Returns:
+            asyncio.Task: A task that resolves to a Result (Success/Failure).
+        
+        Examples:
+            # Upsert with instance
+            db.upsert(TalkbackSettings(server_id=123, enabled=True))
+            
+            # Upsert with kwargs
+            db.upsert(TalkbackSettings, server_id=123, enabled=True)
+        """
+        
+        async def _perform_upsert():
+            try:
+                # 1. Check if passed a CLASS (Type)
+                if isinstance(obj_or_type, type):
+                    dataclass_type = obj_or_type
+                    table_name = self._get_table_name(dataclass_type)
+                    primary_key = self._get_primary_key(dataclass_type)
+                    
+                    if primary_key not in kwargs:
+                        raise DatabaseError(f"Primary key '{primary_key}' not provided for upsert")
+                    
+                    # Extract ID for Test Mode check
+                    pk_value = kwargs[primary_key]
+                    server_id = pk_value if primary_key == "server_id" else kwargs.get("server_id")
+                    
+                    # Prepare data (filter out _sync and other non-field args if necessary)
+                    # Note: We trust kwargs contains valid columns here, similar to update
+                    upsert_data = {k: v for k, v in kwargs.items() if k != '_sync'}
+
+                # 2. Check if passed an INSTANCE
+                else:
+                    dataclass_type = type(obj_or_type)
+                    table_name = self._get_table_name(dataclass_type)
+                    primary_key = self._get_primary_key(dataclass_type)
+                    
+                    # Extract ID for Test Mode check
+                    pk_value = getattr(obj_or_type, primary_key)
+                    server_id = getattr(obj_or_type, 'server_id', pk_value if primary_key == "server_id" else None)
+                    
+                    # Convert to dict
+                    upsert_data = self._dataclass_to_dict(obj_or_type)
+
+                # Skip writes in test mode unless it's the test guild
+                target_id = server_id if server_id is not None else pk_value
+
+                if self.state.args.test and server_id and server_id != TEST_GUILD:
+                    self.logger.info(f"Test mode: Skipping upsert to ID {target_id}")
+                    return Success(None)
+                
+                if self.supabase is None:
+                    raise RuntimeError("Database not initialized. Call await db.initialize()")
+
+                start = time.perf_counter()
+                
+                # Perform the Upsert
+                # Note: Supabase upsert requires the Primary Key to be present in the data payload
+                await self.supabase.table(table_name)\
+                    .upsert(upsert_data)\
+                    .execute()
+                
+                delta = 1000 * (time.perf_counter() - start)
+                self.logger.info(f"Single UPSERT took {delta:.2f}ms")
+                
+                return Success(None)
+                
+            except Exception as e:
+                self.logger.error(f"Failed to upsert: {e}", exc_info=True)
+                return Failure(DatabaseError(f"Upsert failed: {e}"))
+
+        # Create task on current loop
+        task = asyncio.create_task(_perform_upsert())
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+
+        if _sync:
+            return task
+        
+        # Fire-and-forget error logging
+        def _log_error(t):
+            try:
+                t.result()
+            except Exception as e:
+                self.logger.error(f"Background upsert task failed: {e}")
         
         task.add_done_callback(_log_error)
         return task
@@ -582,7 +679,7 @@ class RotiDatabase(metaclass=Singleton):
                 return Failure(DatabaseError(f"Server {guild.name} already initialized"))
             
             # Insert server config (for MOTD)
-            await self.insert(Motd(server_id=server_id, motd=""))
+            await self.insert(MotdTable(server_id=server_id, motd=""))
             
             # Insert talkback settings
             await self.insert(TalkbackSettings(server_id=server_id))
@@ -609,7 +706,7 @@ class RotiDatabase(metaclass=Singleton):
         """
         try:
             # Delete server config (cascades to settings via foreign keys)
-            result = await self.delete(Motd, server_id=server_id)
+            result = await self.delete(MotdTable, server_id=server_id)
             
             if isinstance(result, Failure):
                 return Some(result.failure())

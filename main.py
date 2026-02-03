@@ -52,7 +52,7 @@ class Roti(commands.Bot):
                     relative_path = os.path.relpath(root, "./cogs").replace(os.sep, ".")
                     module_name = f"cogs.{relative_path}.{file[:-3]}" if relative_path != "." else f"cogs.{file[:-3]}"
 
-                    if "settings" not in module_name:
+                    if "settings" not in module_name and "statistics" not in module_name and "motd" not in module_name:
                         continue
                     
                     try:

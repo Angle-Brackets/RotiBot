@@ -5,7 +5,7 @@ from discord.ext import commands
 from collections import defaultdict, namedtuple
 from typing import Callable, Optional, List, NamedTuple
 from dataclasses import dataclass, field
-from database.data import RotiDatabase, TalkbackTriggers, Quotes
+from database.data import RotiDatabase, TalkbackTriggersTable, QuotesTable
 
 @dataclass(slots=True, kw_only=True, frozen=True)
 class FunctionInfo:
@@ -183,7 +183,7 @@ async def _calculate_talkback_count(db: RotiDatabase) -> TalkbackUsage:
     """
     This is a cached function to calculate the number of talkbacks present across all servers.
     """
-    trigger_count = await db.count(TalkbackTriggers)
+    trigger_count = await db.count(TalkbackTriggersTable)
     response_count = await db.raw_query(
         """
         SELECT SUM(array_length(responses, 1)) as total_responses
@@ -199,8 +199,8 @@ async def _calculate_quote_usage(db : RotiDatabase) -> QuoteUsage:
     """
     This is a cached function to calculate the number of quotes present across all servers, organized by type of quote.
     """
-    nonreplaceable = await db.count(Quotes, replaceable=False)
-    replaceable = await db.count(Quotes, replaceable=True)
+    nonreplaceable = await db.count(QuotesTable, replaceable=False)
+    replaceable = await db.count(QuotesTable, replaceable=True)
 
     return QuoteUsage(nonreplaceable=nonreplaceable, replaceable=replaceable)
 
