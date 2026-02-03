@@ -7,7 +7,7 @@ import logging
 
 from discord.ext import commands, tasks
 from discord import app_commands
-from database.data import RotiDatabase, RotiState
+from database.data import RotiDatabase, RotiState, MusicSettings
 from time import strftime, gmtime
 from utils.RotiUtilities import cog_command
 from cogs.statistics.statistics_helpers import statistic
@@ -216,7 +216,7 @@ class Music(commands.Cog):
     
     @app_commands.command(name="join", description="Join your current voice channel.")
     async def _join(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         if not interaction.user.voice:
             return await interaction.followup.send("You are not in a voice channel!")
         
@@ -279,8 +279,8 @@ class Music(commands.Cog):
             await interaction.followup.send(f"Added **{track.title}** to queue!")
 
         if not player.is_playing:
-            vol = self.db[interaction.guild_id, "settings", "music", "volume"].value_or(100)
-            await player.set_volume(vol)
+            row = await self.db.select(MusicSettings, server_id=interaction.guild_id)
+            await player.set_volume(row.volume)
             await player.play()
     
     @app_commands.command(name="skip", description="Skips the current track playing")
@@ -307,7 +307,7 @@ class Music(commands.Cog):
     
     @app_commands.command(name="disconnect", description="Disconnects the bot.")
     async def _disconnect(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         player = self.lavalink.player_manager.get(interaction.guild.id)
 
         if not player or not player.is_connected:
@@ -328,11 +328,12 @@ class Music(commands.Cog):
             
     @app_commands.command(name="queue", description="Displays the queue")
     async def _queue(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         player = self.lavalink.player_manager.get(interaction.guild.id)
         
         if player and (player.queue or player.is_playing):
-            view = MusicNav(self.db, player, interaction.guild_id)
+            row = await self.db.select(MusicSettings, server_id=interaction.guild_id)
+            view = MusicNav(player, row)
             embed = _generate_queue_embed(player, interaction)
             
             # Send and store message in view for auto-deletion
@@ -346,7 +347,7 @@ class Music(commands.Cog):
     
     @app_commands.command(name="loop", description="Cycle through loop modes: Off, Single, or Queue.")
     async def _loop(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         player = self.lavalink.player_manager.get(interaction.guild_id)
         
         if not player or not player.is_playing:
@@ -366,19 +367,23 @@ class Music(commands.Cog):
     
     @app_commands.command(name="speed", description="Modify playback speed.")
     async def _speed(self, interaction: discord.Interaction, speed: typing.Optional[app_commands.Range[int, 0, 200]]):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         if speed is None:
-            curr = self.db[interaction.guild_id, 'settings', 'music', 'speed'].value_or(100)
-            return await interaction.followup.send(f"Current speed: {curr}%")
-        self.db[interaction.guild_id, "settings", "music", "speed"] = speed
+            row = self.db.select(MusicSettings, server_id=interaction.guild_id)
+            return await interaction.followup.send(f"Current speed: {row.speed}%")
+        self.db.update(MusicSettings, server_id=interaction.guild_id, speed=speed)
         player = self.lavalink.player_manager.get(interaction.guild_id)
         if player: await player.set_filter(lavalink.filters.Timescale(speed=speed/100))
         await interaction.followup.send(f"Speed set to {speed}%")
 
     @app_commands.command(name="pitch", description="Modify playback pitch.")
-    async def _pitch(self, interaction: discord.Interaction, pitch: app_commands.Range[int, 0, 200]):
-        await interaction.response.defer()
-        self.db[interaction.guild_id, "settings", "music", "pitch"] = pitch
+    async def _pitch(self, interaction: discord.Interaction, pitch: typing.Optional[app_commands.Range[int, 0, 200]]):
+        await interaction.response.defer(ephemeral=True)
+        if pitch is None:
+            row = await self.db.select(MusicSettings, server_id=interaction.guild_id)
+            return await interaction.followup.send(f"Current pitch is {row.pitch}%")
+
+        self.db.update(MusicSettings, server_id=interaction.guild_id, pitch=pitch)
         player = self.lavalink.player_manager.get(interaction.guild_id)
         if player:
             await player.set_filter(lavalink.filters.Timescale(pitch=pitch/100))
@@ -386,36 +391,29 @@ class Music(commands.Cog):
 
     @app_commands.command(name="volume", description="Modify the base volume.")
     async def _volume(self, interaction: discord.Interaction, volume: typing.Optional[app_commands.Range[int, 0, 500]]):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         if volume is None:
-            curr = self.db[interaction.guild_id, 'settings', 'music', 'volume'].value_or(100)
-            return await interaction.followup.send(f"Current volume: {curr}%")
+            row = await self.db.select(MusicSettings, server_id=interaction.guild_id)
+            return await interaction.followup.send(f"Current volume: {row.volume}%")
         
-        self.db[interaction.guild_id, "settings", "music", "volume"] = volume
+        self.db.update(MusicSettings, server_id=interaction.guild_id, volume=volume)
         player = self.lavalink.player_manager.get(interaction.guild_id)
         if player: await player.set_volume(volume)
         await interaction.followup.send(f"Volume set to {volume}%")
 
 # --- UI View with Timeout and Pitch ---
 class MusicNav(discord.ui.View):
-    def __init__(self, db: RotiDatabase, player: lavalink.DefaultPlayer, g_id: int):
+    def __init__(self, player: lavalink.DefaultPlayer, row : MusicSettings):
         super().__init__(timeout=60)
-        self.db = db
         self.player = player
-        self.guild_id = g_id
         self.message = None # Will be set in the /queue command
         
-        # Load DB settings for dynamic UI
-        vol = self.db[self.guild_id, 'settings', 'music', 'volume'].value_or(100)
-        spd = self.db[self.guild_id, 'settings', 'music', 'speed'].value_or(100)
-        pit = self.db[self.guild_id, 'settings', 'music', 'pitch'].value_or(100)
+        self._volume_label.label = f"{row.volume}%"
+        self._speed_label.label = f"{row.speed}%"
+        self._pitch_label.label = f"{row.pitch}%"
         
-        self._volume_label.label = f"{vol}%"
-        self._speed_label.label = f"{spd}%"
-        self._pitch_label.label = f"{pit}%"
-        
-        self._volume_label.emoji = "🔇" if vol == 0 else discord.PartialEmoji(name="kirbin", id=996961280919355422, animated=True)
-        self._speed_label.emoji = discord.PartialEmoji(name="sonic_waiting", id=996961282639024171, animated=True) if spd < 100 else discord.PartialEmoji(name="sonic_running", id=996961281837908008, animated=True)
+        self._volume_label.emoji = "🔇" if row.volume == 0 else discord.PartialEmoji(name="kirbin", id=996961280919355422, animated=True)
+        self._speed_label.emoji = discord.PartialEmoji(name="sonic_waiting", id=996961282639024171, animated=True) if row.speed < 100 else discord.PartialEmoji(name="sonic_running", id=996961281837908008, animated=True)
 
     async def on_timeout(self):
         """Auto-delete the message when the UI times out."""
