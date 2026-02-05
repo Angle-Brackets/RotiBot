@@ -5,7 +5,7 @@ from supabase import acreate_client, AsyncClient
 from datetime import date
 from dataclasses import dataclass, fields, field, asdict
 from utils.Singleton import Singleton
-from typing import Dict, Any, List, Optional, Dict, Type, TypeVar
+from typing import Dict, Any, List, Optional, Dict, Type, TypeVar, Final
 from returns.result import Result, Success, Failure
 from returns.maybe import Maybe, Some, Nothing
 from database.bot_state import RotiState
@@ -55,7 +55,7 @@ class MusicSettings:
 class QuotesTable:
     """Quotes table"""
     __tablename__ = "Quotes"
-    id: int = field(metadata={"primary": True})
+    id: Final[int] = field(init=False, default=None, metadata={"primary": True})
     server_id : int
     tag : str
     quote : str
@@ -79,7 +79,7 @@ class TalkbacksTable:
     For more info, checkout the TalkbackDriver class in `talkbacks.py`.
     """
     __tablename__ = "talkbacks"
-    id : int = field(metadata={"primary": True})
+    id : Final[int] = field(init=False, default=None, metadata={"primary": True})
     server_id : int
     responses : List[str]
     created_at : date
@@ -205,12 +205,28 @@ class RotiDatabase(metaclass=Singleton):
         return {k: v for k, v in data.items() if v is not None}
     
     def _dict_to_dataclass(self, dataclass_type: Type[T], data: Dict[str, Any]) -> T:
-        """Convert dict to dataclass instance."""
-        # Get field names from dataclass
-        field_names = {f.name for f in fields(dataclass_type)}
-        # Filter dict to only include fields that exist in dataclass
-        filtered_data = {k: v for k, v in data.items() if k in field_names}
-        return dataclass_type(**filtered_data)
+        """Convert dict to dataclass instance, handling init=False fields like 'id'."""
+        # 1. Get all fields defined in the dataclass
+        all_fields = fields(dataclass_type)
+        
+        # 2. Separate fields that go in the constructor (init=True) 
+        # from those that don't (init=False)
+        init_field_names = {f.name for f in all_fields if f.init}
+        
+        # 3. Create a dict of data for the constructor
+        constructor_data = {k: v for k, v in data.items() if k in init_field_names}
+        
+        # 4. Create the instance
+        instance = dataclass_type(**constructor_data)
+        
+        # 5. Manually set the fields that were init=False (like your 'id')
+        # We use object.__setattr__ to bypass 'frozen=True' or 'Final' restrictions
+        non_init_field_names = {f.name for f in all_fields if not f.init}
+        for k, v in data.items():
+            if k in non_init_field_names:
+                object.__setattr__(instance, k, v)
+                
+        return instance
     
     # ========================================================================
     # CORE OPERATIONS
@@ -255,6 +271,57 @@ class RotiDatabase(metaclass=Singleton):
         except Exception as e:
             self.logger.warning(f"Failed to select {dataclass_type.__name__}: {e}")
             return None
+    
+    async def select_one(
+        self,
+        dataclass_type: Type[T],
+        **filter_kwargs
+    ) -> Optional[T]:
+        """
+        Select a single record by any combination of fields (not just primary key).
+        
+        Use this when you want to select by a unique combination of fields
+        that isn't the primary key (e.g., server_id + tag for quotes).
+        
+        Args:
+            dataclass_type: The dataclass type
+            **filter_kwargs: Filter conditions (e.g., server_id=12345, tag="funny")
+            
+        Returns:
+            Single dataclass instance or None if not found
+            
+        Examples:
+            # Select quote by server_id + tag (unique combination)
+            quote = await db.select_one(QuotesTable, server_id=12345, tag="funny")
+            
+            # Select talkback by server_id + id
+            talkback = await db.select_one(TalkbacksTable, server_id=12345, id=42)
+            
+            # If multiple rows match, returns the first one
+            user_motd = await db.select_one(MotdTable, user_id=12345)
+        """
+        try:
+            table_name = self._get_table_name(dataclass_type)
+            
+            # Build query with filters
+            query = self.supabase.table(table_name).select('*')
+            for key, value in filter_kwargs.items():
+                query = query.eq(key, value)
+            
+            start = time.perf_counter()
+            # Use .limit(1) instead of .single() to avoid errors if not found
+            result = await query.limit(1).execute()
+            delta = 1000 * (time.perf_counter() - start)
+            
+            if not result.data or len(result.data) == 0:
+                return None
+            
+            self.logger.info(f"Single SELECT (by filter) took {delta:.2f}ms")
+            return self._dict_to_dataclass(dataclass_type, result.data[0])
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to select_one {dataclass_type.__name__}: {e}")
+            return None
             
     async def select_all(
         self,
@@ -296,43 +363,74 @@ class RotiDatabase(metaclass=Singleton):
             self.logger.error(f"Failed to select all {dataclass_type.__name__}: {e}")
             return []
 
-    async def insert(self, obj: T, _sync: bool = True) -> Result[T, DatabaseError]:
+    def insert(self, obj: T, _sync: bool = False) -> asyncio.Task:
         """
-        Insert a new record.
+        Insert a new record (fire-and-forget by default).
         
         Args:
             obj: Dataclass instance to insert
-            _sync: Whether to execute synchronously (default True)
+            _sync: Whether to wait for completion (default False)
             
         Returns:
-            Result with inserted object or error
+            asyncio.Task that resolves to Result[T, DatabaseError]
             
-        Example:
-            await db.insert(TalkbackSettings(server_id=12345))
+        Examples:
+            # Fire and forget (most common)
+            db.insert(TalkbackSettings(server_id=12345))
+            
+            # Wait for result
+            result = await db.insert(TalkbackSettings(server_id=12345), _sync=True)
+            if isinstance(result, Success):
+                inserted_obj = result.unwrap()
         """
-        try:
-            dataclass_type = type(obj)
-            server_id = getattr(obj, 'server_id', None)
-            table_name = self._get_table_name(dataclass_type)
-            data = self._dataclass_to_dict(obj)
-            
-            start = time.perf_counter()
-            result = await self.supabase.table(table_name).insert(data).execute()
-            delta = 1000*(time.perf_counter() - start)
-
-            if self.state.args.test and server_id and server_id != TEST_GUILD:
-                self.logger.info(f"Test Mode: Blocking insert for server {server_id}")
-                return Success(obj)
-            
-            if not result.data:
-                return Failure(DatabaseError("Insert failed - no data returned"))
-            
-            self.logger.info(f"Single INSERT took {delta:.2f}ms")
-            return Success(self._dict_to_dataclass(dataclass_type, result.data[0]))
-            
-        except Exception as e:
-            self.logger.error(f"Failed to insert {dataclass_type.__name__}: {e}")
-            return Failure(DatabaseError(f"Insert failed: {e}"))
+        
+        async def _perform_insert():
+            try:
+                dataclass_type = type(obj)
+                server_id = getattr(obj, 'server_id', None)
+                table_name = self._get_table_name(dataclass_type)
+                data = self._dataclass_to_dict(obj)
+                
+                # Skip writes in test mode unless it's the test guild
+                if self.state.args.test and server_id and server_id != TEST_GUILD:
+                    self.logger.info(f"Test mode: Blocking insert for server {server_id}")
+                    return Success(obj)
+                
+                if self.supabase is None:
+                    raise RuntimeError("Database not initialized. Call await db.initialize()")
+                
+                start = time.perf_counter()
+                result = await self.supabase.table(table_name).insert(data).execute()
+                delta = 1000 * (time.perf_counter() - start)
+                
+                if not result.data:
+                    return Failure(DatabaseError("Insert failed - no data returned"))
+                
+                self.logger.info(f"Single INSERT took {delta:.2f}ms")
+                return Success(self._dict_to_dataclass(dataclass_type, result.data[0]))
+                
+            except Exception as e:
+                self.logger.error(f"Failed to insert {dataclass_type.__name__}: {e}", exc_info=True)
+                return Failure(DatabaseError(f"Insert failed: {e}"))
+        
+        # Create task on current loop
+        task = asyncio.create_task(_perform_insert())
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+        
+        if _sync:
+            # If user wants to await it, we return the task (which is awaitable)
+            return task
+        
+        # If fire-and-forget, add a logger callback so errors aren't silent
+        def _log_error(t):
+            try:
+                t.result()
+            except Exception as e:
+                self.logger.error(f"Background insert task failed: {e}")
+        
+        task.add_done_callback(_log_error)
+        return task
     
     def update(self, obj_or_type, _sync: bool = False, **kwargs) -> asyncio.Task:
         """
