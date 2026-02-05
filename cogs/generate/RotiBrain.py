@@ -34,8 +34,7 @@ class RotiBrain:
         self.logger = logging.getLogger(__name__)
         self.behavior_prompt : str = _ROTI_BEHAVIOR_PROMPT
         self.text_models : Dict[str, TextModel] = self._get_text_models()
-        self.image_models : List[ImageModel] = self._get_image_models()
-        
+        self.image_models : List[ImageModel] = self._get_image_models()        
 
     # Generates an image with a given query.
     @statistic(display_name="Generate Image", category="Generate")
