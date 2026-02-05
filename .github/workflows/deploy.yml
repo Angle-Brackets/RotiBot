@@ -57,7 +57,7 @@ jobs:
           --from-literal=MUSIC_PASS="${{ secrets.MUSIC_PASS }}" \
           --from-literal=APPLICATION_ID="${{ secrets.APPLICATION_ID }}" \
           --from-literal=DATABASE="${{ secrets.DATABASE }}" \
-          --from-literal=DATABASE="${{ secrets.DATABASE_PASS }}"
+          --from-literal=DATABASE_PASS="${{ secrets.DATABASE_PASS }}"
           --from-literal=MUSIC_IP="${{ secrets.MUSIC_IP }}" \
           --from-literal=TEST_TOKEN="${{ secrets.TEST_TOKEN }}" \
           --from-literal=TEST_APPLICATION_ID="${{ secrets.TEST_APPLICATION_ID }}" \
