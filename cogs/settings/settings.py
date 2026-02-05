@@ -28,6 +28,7 @@ class Settings(commands.GroupCog, group_name="settings"):
 
     @talkback_group.command(name="strict", description="Toggles if Roti will be \"strict\" in matching triggers to talkbacks / only look for exact matches.")
     async def _talkback_strict(self, interaction : discord.Interaction, state : typing.Optional[bool]):
+        # TODO(02/04/26): This isn't currently implemented, everything is a non-strict match right now.
         await interaction.response.defer()
         current = await self.db.select(TalkbackSettings, server_id=interaction.guild.id)
 

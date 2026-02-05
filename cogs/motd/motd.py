@@ -31,29 +31,29 @@ class Motd(commands.GroupCog, group_name="motd"):
             self.db.upsert(MotdTable, user_id=interaction.user.id, motd=motd)
 
             if old and old.motd:
-                await interaction.followup.send(f"Successfully added new message of the day: \"{motd}\"\n Overwrote previous entry: \"{old.motd}\"")
+                await interaction.followup.send(f"Successfully added new message of the day: \"{motd}\"\n Overwrote previous entry: \"{old.motd}\"", ephemeral=True)
             else:
-                await interaction.followup.send(f"Successfully added new message of the day: \"{motd}\"")
+                await interaction.followup.send(f"Successfully added new message of the day: \"{motd}\"", ephemeral=True)
 
     @app_commands.command(name="clear", description="Removes the \"Message of the Day\" associated with you.")
     async def _motd_clear(self, interaction : discord.Interaction):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         old = await self.db.select(MotdTable, user_id=interaction.user.id)
 
         if old and old.motd:
             self.db.update(MotdTable, user_id=interaction.user.id, motd="") # Blank String is the same as none, cheaper than an entire DELETE.
-            await interaction.followup.send(f"Successfully cleared MOTD associated with you {old.motd}")
+            await interaction.followup.send(f"Successfully cleared MOTD associated with you {old.motd}", ephemeral=True)
         else:
-            await interaction.followup.send("There is no MOTD associated with you currently, add one using /motd add!")
+            await interaction.followup.send("There is no MOTD associated with you currently, add one using /motd add!", ephemeral=True)
 
     @app_commands.command(name="show", description="Shows the \"Message of the Day\" associated with you.")
     async def _motd_show(self, interaction : discord.Interaction):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         old = await self.db.select(MotdTable, user_id=interaction.user.id)
         if old and old.motd:
-            await interaction.followup.send(f"The current MOTD associated with you is: \"{old}\"")
+            await interaction.followup.send(f"The current MOTD associated with you is: \"{old.motd}\"", ephemeral=True)
         else:
-            await interaction.followup.send("There is no MOTD associated with you currently, add one using /motd add!")
+            await interaction.followup.send("There is no MOTD associated with you currently, add one using /motd add!", ephemeral=True)
 
 
     async def choose_motd(self, current_motd : Optional[str]):

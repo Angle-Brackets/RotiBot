@@ -1,4 +1,4 @@
-# Roti V1.9.8 Alpha
+# Roti V1.0 Beta
 
 A simple general use discord bot written in ``discord.py``.\
 Invite Roti to your server: https://bit.ly/3rNbV72

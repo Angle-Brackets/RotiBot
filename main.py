@@ -1,5 +1,5 @@
-#ROTI BOT V1.9.6 ALPHA (2025 - 07 - 15)
-#BY @soupa., CURRENTLY WRITTEN IN PYTHON USING MONGO DATABASE FOR DATA.
+#ROTI BOT V1.0 BETA (2026 - 02 - 04)
+#BY @soupa., CURRENTLY WRITTEN IN PYTHON USING SUPABASE DATABASE FOR DATA.
 
 import discord
 import aiohttp
@@ -51,10 +51,6 @@ class Roti(commands.Bot):
                 if file.endswith(".py"):
                     relative_path = os.path.relpath(root, "./cogs").replace(os.sep, ".")
                     module_name = f"cogs.{relative_path}.{file[:-3]}" if relative_path != "." else f"cogs.{file[:-3]}"
-
-                    if "settings" not in module_name and "statistics" not in module_name and "motd" not in module_name:
-                        continue
-                    
                     try:
                         module = importlib.import_module(module_name)
                         
