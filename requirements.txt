@@ -3,11 +3,11 @@ aiopyston==1.2.1
 beautifulsoup4==4.14.3
 discord.py==2.4.0
 lavalink==5.9.0
+packaging==26.0
 Pillow==12.1.0
-pymongo==4.16.0
 python-dotenv==1.2.1
+PyYAML==6.0.3
 Requests==2.32.5
 returns==0.26.0
-supabase==2.27.2
+supabase==2.27.3
 urllib3==1.26.20
-Wikipedia_API==0.7.3

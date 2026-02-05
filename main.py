@@ -1,5 +1,5 @@
-#ROTI BOT V1.9.6 ALPHA (2025 - 07 - 15)
-#BY @soupa., CURRENTLY WRITTEN IN PYTHON USING MONGO DATABASE FOR DATA.
+#ROTI BOT V1.0 BETA (2026 - 02 - 04)
+#BY @soupa., CURRENTLY WRITTEN IN PYTHON USING SUPABASE DATABASE FOR DATA.
 
 import discord
 import aiohttp
@@ -33,6 +33,7 @@ class Roti(commands.Bot):
 
     async def setup_hook(self):
         self.session = aiohttp.ClientSession()
+        await self.db.initialize()
         await self._load_cogs()
 
         # Music bot setup - connection now handled in Music cog
@@ -50,7 +51,6 @@ class Roti(commands.Bot):
                 if file.endswith(".py"):
                     relative_path = os.path.relpath(root, "./cogs").replace(os.sep, ".")
                     module_name = f"cogs.{relative_path}.{file[:-3]}" if relative_path != "." else f"cogs.{file[:-3]}"
-                    
                     try:
                         module = importlib.import_module(module_name)
                         
@@ -92,7 +92,7 @@ class Roti(commands.Bot):
         if general and general.permissions_for(guild.me).send_messages:
             await general.send(
                 f'Hello {guild.name}, I\'m Roti! Thank you for adding me to this guild. You can check my commands by doing /help. Wait a moment while I prepare my database for this server...')
-            res = self.db.update_database(guild)
+            res = self.db.initialize_server(guild)
             await general.send(res)
         else:
             # if there is none, finds first text channel it can speak in.
@@ -100,7 +100,7 @@ class Roti(commands.Bot):
                 if channel.permissions_for(guild.me).send_messages:
                     await channel.send(
                         f'Hello {guild.name}, I\'m Roti! Thank you for adding me to this guild. You can check my commands by doing /help. Wait a moment while I prepare my database for this server...')
-                    res = self.db.update_database(guild)
+                    res = self.db.initialize_server(guild)
                     await channel.send(res)
                     break
 

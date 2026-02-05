@@ -21,7 +21,7 @@ class Statistics(commands.GroupCog, group_name="statistics"):
     
     @app_commands.command(name="usage", description="View the usage statistics for Roti.")
     async def _usage_statistics(self, interaction : discord.Interaction):
-        await interaction.response.send_message(embed=self._build_usage_embed(), ephemeral=True)
+        await interaction.response.send_message(embed=await self._build_usage_embed(), ephemeral=True)
 
     def _build_statistic_embed(self) -> discord.Embed:
         """
@@ -51,9 +51,9 @@ class Statistics(commands.GroupCog, group_name="statistics"):
         
         return embed
 
-    def _build_usage_embed(self) -> discord.Embed:
-        usage_stats : RotiUsage = get_usage_statistics(self.db, [guild.id for guild in self.bot.guilds])
-        population : RotiPopulation = get_population(self.bot, self.db, [guild.id for guild in self.bot.guilds])
+    async def _build_usage_embed(self) -> discord.Embed:
+        usage_stats : RotiUsage = await get_usage_statistics(self.db)
+        population : RotiPopulation = get_population(self.bot, [guild.id for guild in self.bot.guilds])
         embed = discord.Embed(
             title="Roti Usage Statistics",
             description=f"Roti is registered in {population.servers} servers with {population.users} users!",

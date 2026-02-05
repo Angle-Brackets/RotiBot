@@ -31,7 +31,7 @@
   },
   "MOTD": {
     "title": "Help for the /motd command",
-    "description": "Allows for a new status to be added to Roti to be displayed globally (One per server).",
+    "description": "Allows for a new status to be added to Roti to be displayed globally (one per user).",
     "command_base": "motd",
     "emoji": ":date:",
     "commands": {
@@ -43,12 +43,12 @@
         }
       },
       "clear": {
-        "description": "Removes the MOTD/status associated with this guild.",
+        "description": "Removes the MOTD/status associated with you.",
         "usage": "/motd clear",
         "arguments": {}
       },
       "show": {
-        "description": "Displays the current MOTD/Status associated with this guild.",
+        "description": "Displays the current MOTD/Status associated with you.",
         "usage": "/motd show",
         "arguments": {}
       }

@@ -3,10 +3,11 @@ import random
 import database.data as data
 import logging
 
+from returns.result import Success, Failure
 from typing import Optional
 from discord import app_commands
 from discord.ext import commands, tasks
-from database.data import RotiDatabase
+from database.data import RotiDatabase, MotdTable
 from utils.RotiUtilities import cog_command
 
 @cog_command
@@ -21,57 +22,62 @@ class Motd(commands.GroupCog, group_name="motd"):
     @app_commands.describe(motd = "A phrase to displayed in Roti's status.")
     @app_commands.command(name="add", description="Add a \"Message of the Day\" to the bot to be displayed in its status")
     async def _motd_add(self, interaction : discord.Interaction, motd : str):
-        await interaction.response.defer()
-        motd_entry = self.db[interaction.guild_id, "motd"].unwrap()
+        await interaction.response.defer(ephemeral=True)
 
         if len(motd) > 128:
             await interaction.followup.send("Failed to add given Message of the Day - Message exceeded max of 128 characters.")
         else:
-            self.db[interaction.guild_id, "motd"] = motd
+            old = await self.db.select(MotdTable, user_id=interaction.user.id)
+            self.db.upsert(MotdTable, user_id=interaction.user.id, motd=motd)
 
-            # If the motd database entry is non-empty for a server
-            if motd_entry:
-                await interaction.followup.send(f"Successfully added new message of the day: \"{motd}\"\n Overwrote previous entry: \"{motd_entry}\"")
+            if old and old.motd:
+                await interaction.followup.send(f"Successfully added new message of the day: \"{motd}\"\n Overwrote previous entry: \"{old.motd}\"", ephemeral=True)
             else:
-                await interaction.followup.send(f"Successfully added new message of the day: \"{motd}\"")
+                await interaction.followup.send(f"Successfully added new message of the day: \"{motd}\"", ephemeral=True)
 
-    @app_commands.command(name="clear", description="Removes the \"Message of the Day\" associated with this guild.")
+    @app_commands.command(name="clear", description="Removes the \"Message of the Day\" associated with you.")
     async def _motd_clear(self, interaction : discord.Interaction):
-        await interaction.response.defer()
-        motd_entry = self.db[interaction.guild_id, "motd"].unwrap()
+        await interaction.response.defer(ephemeral=True)
+        old = await self.db.select(MotdTable, user_id=interaction.user.id)
 
-        if motd_entry:
-            self.db[interaction.guild_id, "motd"] = ""
-            await interaction.followup.send(f"Successfully cleared MOTD associated with this guild: {motd_entry}")
+        if old and old.motd:
+            self.db.update(MotdTable, user_id=interaction.user.id, motd="") # Blank String is the same as none, cheaper than an entire DELETE.
+            await interaction.followup.send(f"Successfully cleared MOTD associated with you {old.motd}", ephemeral=True)
         else:
-            await interaction.followup.send("There is no MOTD associated with this server currently, add one using /motd add!")
+            await interaction.followup.send("There is no MOTD associated with you currently, add one using /motd add!", ephemeral=True)
 
-    @app_commands.command(name="show", description="Shows the \"Message of the Day\" associated with this guild.")
+    @app_commands.command(name="show", description="Shows the \"Message of the Day\" associated with you.")
     async def _motd_show(self, interaction : discord.Interaction):
-        await interaction.response.defer()
-        motd = self.db[interaction.guild_id, "motd"].unwrap()
-        if motd:
-            await interaction.followup.send(f"The current MOTD associated with this server is: \"{motd}\"")
+        await interaction.response.defer(ephemeral=True)
+        old = await self.db.select(MotdTable, user_id=interaction.user.id)
+        if old and old.motd:
+            await interaction.followup.send(f"The current MOTD associated with you is: \"{old.motd}\"", ephemeral=True)
         else:
-            await interaction.followup.send("There is no MOTD associated with this server currently, add one using /motd add!")
+            await interaction.followup.send("There is no MOTD associated with you currently, add one using /motd add!", ephemeral=True)
 
 
-    def choose_motd(self, current_motd : Optional[str]):
-        guild_ids = {guild.id for guild in self.bot.guilds}
-        to_remove = set()
+    async def choose_motd(self, current_motd : Optional[str]):
+        # Escape single quotes by doubling them
+        safe_current = current_motd.replace("'", "''") if current_motd else ""
         
-         # Removes current MOTD present on bot (prevents repeats) and blank MOTDs.
-        if current_motd:
-            for guild_id in guild_ids:
-                if not self.db[guild_id, "motd"].unwrap() or self.db[guild_id, "motd"].unwrap() == current_motd:
-                    to_remove.add(guild_id)
-        
-        guild_ids -= to_remove
-        return self.db[random.choice(list(guild_ids)), "motd"].unwrap()
+        query = f"""
+        SELECT * FROM "Motd"
+        WHERE "motd" != '{safe_current}' AND "motd" != ''
+        ORDER BY RANDOM()
+        LIMIT 1
+        """
 
+        match await self.db.raw_query(query):
+            case Success(row):
+                return self.db._dict_to_dataclass(MotdTable, row[0]).motd
+            case Failure(error):
+                self.logger.error(f"Failed to read MOTD table %s", error)
+                return ""
+        
     @tasks.loop(hours=3)
     async def motd_swap(self):
-        await self.bot.change_presence(activity=discord.Activity(name=self.choose_motd(self.bot.activity.name if self.bot.activity else None), type=discord.ActivityType.playing))
+        new_motd = await self.choose_motd(self.bot.activity.name if self.bot.activity else "")
+        await self.bot.change_presence(activity=discord.Activity(name=new_motd, type=discord.ActivityType.playing))
 
     @motd_swap.before_loop
     async def startup(self):
