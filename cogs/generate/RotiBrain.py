@@ -7,6 +7,7 @@ from cogs.statistics.statistics_helpers import statistic
 from typing import Dict, List, Optional
 from io import BytesIO
 from PIL import Image
+from database.bot_state import RotiState
 
 _ROTI_BEHAVIOR_PROMPT = \
 """
@@ -33,6 +34,7 @@ class RotiBrain:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.behavior_prompt : str = _ROTI_BEHAVIOR_PROMPT
+        self.api_key : str = RotiState().credentials.pollinations_key
         self.text_models : Dict[str, TextModel] = self._get_text_models()
         self.image_models : List[ImageModel] = self._get_image_models()        
 
@@ -41,104 +43,145 @@ class RotiBrain:
     def generate_image(self, prompt, model) -> BytesIO:
         """
         Generates an AI image response with the given model and prompt.
-        The seed is randomized (API signifies -1 as random) to make a different image with the same prompt.
+        The seed is randomized (-1 = random) to make a different image with the same prompt.
         "Enhance" is set to true to give the best image output.
 
-        API Docs: https://enter.pollinations.ai/api/docs#tag/genpollinationsai/GET/text/{prompt}
+        New API: https://gen.pollinations.ai/image/{prompt}
         """
-        query = f"https://image.pollinations.ai/prompt/{prompt}?seed=-1&model={model}&enhance=true"
+        # Default to flux if no model specified
+        if not model:
+            model = "flux"
+            
+        # URL encode the prompt
+        from urllib.parse import quote
+        encoded_prompt = quote(prompt)
         
-        # Create an in-memory buffer to hold the image data
-        headers = {"Accept": "image/png"}
-        req = requests.get(query, headers=headers)
-        if req.status_code != 200:
-            return None
-
-        image_data = BytesIO(req.content)
+        query = f"https://gen.pollinations.ai/image/{encoded_prompt}?model={model}&seed=-1&enhance=true"
+        
+        # Create headers with authentication
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Accept": "image/png, image/jpeg"
+        }
+        
         try:
-            image = Image.open(image_data)
-        except Exception as e:
-            self.logger.warning("Failed to open image: %s", e)
-            self.logger.warning("Response content type:\n%s", req.headers.get('content-type'))
-            self.logger.warning("Response content (first 100 chars):%s", req.content[:100])
-            return None
-        
-        # Save the image to another in-memory buffer
-        image_buffer = BytesIO()
-        image.save(image_buffer, format="PNG")
-        image_buffer.seek(0)  # Reset buffer position to the start
+            req = requests.get(query, headers=headers, timeout=60)
+            if req.status_code != 200:
+                self.logger.warning("Image generation failed with status %s: %s", req.status_code, req.text[:200])
+                return None
 
-        return image_buffer
+            image_data = BytesIO(req.content)
+            image = Image.open(image_data)
+            
+            # Save the image to another in-memory buffer
+            image_buffer = BytesIO()
+            image.save(image_buffer, format="PNG")
+            image_buffer.seek(0)  # Reset buffer position to the start
+
+            return image_buffer
+            
+        except Exception as e:
+            self.logger.warning("Failed to generate image: %s", e)
+            return None
 
     
  
     @statistic(display_name="Generate Text", category="Generate")
-    def generate_ai_response(self, prompt : str, context : Optional[str], context_format : Optional[str], model = "openai") -> str | None:
+    def generate_ai_response(self, prompt : str, context : Optional[str], context_format : Optional[str], model = "gemini-fast") -> str | None:
         """
         Generates an AI text response given the prompt and model.
         This function also takes in the context that you wish to give the bot for it to have a more intelligent response.
 
-        The response is a dictionary with one field called "response", but there's a failsafe 
-        to print a string if that's not the format.
-
-        1/27/26: It looks like openai is the only publicly available model that lets me have this richer POST interface. Sorry!
+        New API uses OpenAI-compatible /v1/chat/completions endpoint.
+        Default model is gemini-fast (free tier, fast responses).
         """ 
-        url = r"https://text.pollinations.ai/openai"
+        url = "https://gen.pollinations.ai/v1/chat/completions"
+        
+        # Default to gemini-fast if no model specified
+        if not model:
+            model = "gemini-fast"
+            
         payload = {
             "messages" : [
                 {"role": "system", "content": self.behavior_prompt},
                 {"role": "user", "content": self._inject_context(prompt, context, context_format)}
             ],
             "model": model,
-            "reasoning_effort": "medium"
+            "max_tokens": 2000
         }
 
         headers = {
+            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
 
-        response = requests.post(url=url, json=payload, headers=headers)
-        
-        if response.status_code != 200:
-            self.logger.warning("Generate AI Response responded with response code: %s", response.status_code)
+        try:
+            response = requests.post(url=url, json=payload, headers=headers, timeout=30)
+            
+            if response.status_code != 200:
+                self.logger.warning("Generate AI Response responded with status %s: %s", response.status_code, response.text[:200])
+                return None
+            
+            return response.json()['choices'][0]['message']['content'][:2000]
+            
+        except Exception as e:
+            self.logger.warning("Failed to generate AI response: %s", e)
             return None
-        
-        return response.json()['choices'][0]['message']['content'][:2000]
 
     # Grabs all text models available, should only be run once.
     def _get_text_models(self) -> Dict[str, TextModel]:
         models = dict()
-        url = r"https://text.pollinations.ai/models"
-        response = requests.get(url=url)
+        url = "https://gen.pollinations.ai/text/models"
         
-        if response.status_code == 200:
-            payload = response.json()
+        headers = {
+            "Authorization": f"Bearer {self.api_key}"
+        }
+        
+        try:
+            response = requests.get(url=url, headers=headers, timeout=10)
             
-            for model in payload:
+            if response.status_code == 200:
+                payload = response.json()
                 
-                models[model["name"]] = TextModel(
-                    name=model["name"],
-                    description=model['description'],
-                )
-        else:
-            self.logger.critical("Could not retrieve text models! Text Generation will NOT work. Response code: %s", response.status_code)
+                for model in payload:
+                    # Only include models that are NOT marked as paid_only
+                    if not model.get("paid_only", False):
+                        models[model["name"]] = TextModel(
+                            name=model["name"],
+                            description=model.get('description', model["name"]),
+                        )
+            else:
+                self.logger.critical("Could not retrieve text models! Response code: %s", response.status_code)
+        except Exception as e:
+            self.logger.critical("Could not retrieve text models! Error: %s", e)
         
         return models
 
     def _get_image_models(self) -> List[ImageModel]:
         models : List[ImageModel] = []
-        url = r"https://image.pollinations.ai/models"
-        response = requests.get(url=url)
+        url = "https://gen.pollinations.ai/image/models"
+        
+        headers = {
+            "Authorization": f"Bearer {self.api_key}"
+        }
+        
+        try:
+            response = requests.get(url=url, headers=headers, timeout=10)
 
-        if response.status_code == 200:
-            payload = response.json()
+            if response.status_code == 200:
+                payload = response.json()
 
-            for model in payload:
-                models.append(ImageModel(
-                    name=model
-                ))
-        else:
-            self.logger.critical("Could not retrieve image models! Image Generation will NOT work. Response code: %s", response.status_code)
+                for model in payload:
+                    # Only include models that are NOT marked as paid_only and output images (not video)
+                    output_modalities = model.get("output_modalities", [])
+                    if not model.get("paid_only", False) and output_modalities and "video" not in output_modalities:
+                        models.append(ImageModel(
+                            name=model.get("name", model) if isinstance(model, dict) else model
+                        ))
+            else:
+                self.logger.critical("Could not retrieve image models! Response code: %s", response.status_code)
+        except Exception as e:
+            self.logger.critical("Could not retrieve image models! Error: %s", e)
 
         return models
     

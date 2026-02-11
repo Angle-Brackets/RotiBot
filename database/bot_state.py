@@ -55,6 +55,7 @@ class BotCredentials(metaclass=Singleton):
         self.__dict__["test_application_id"] = os.getenv("TEST_APPLICATION_ID")
         self.__dict__["youtube_name"] = os.getenv("YOUTUBE_NAME")
         self.__dict__["youtube_pass"] = os.getenv("YOUTUBE_PASS")
+        self.__dict__["pollinations_key"] = os.getenv("POLLINATIONS_KEY", "")
     
     def __setattr__(self, key, value):
         """ Prevents modification of attributes after initialization. """

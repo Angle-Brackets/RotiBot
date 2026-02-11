@@ -1,0 +1,57 @@
+name: Check README Update
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'README.md'
+
+jobs:
+  check-readme-version:
+    name: Verify README Version Update
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout PR branch
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    
+    - name: Check if version was updated
+      id: version_check
+      run: |
+        # Get the version from the current branch
+        CURRENT_VERSION=$(grep -oP '# Roti Beta \K[0-9]+\.[0-9]+\.[0-9]+' README.md || echo "not found")
+        
+        # Get the version from main branch
+        git fetch origin main:main
+        MAIN_VERSION=$(git show main:README.md | grep -oP '# Roti Beta \K[0-9]+\.[0-9]+\.[0-9]+' || echo "not found")
+        
+        echo "Current branch version: $CURRENT_VERSION"
+        echo "Main branch version: $MAIN_VERSION"
+        
+        if [ "$CURRENT_VERSION" = "$MAIN_VERSION" ]; then
+          echo "version_updated=false" >> $GITHUB_OUTPUT
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+        else
+          echo "version_updated=true" >> $GITHUB_OUTPUT
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Comment on PR if version not updated
+      if: steps.version_check.outputs.version_updated == 'false'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '⚠️ **README Update Reminder**\n\nYou modified `README.md` but the version number appears unchanged (currently `${{ steps.version_check.outputs.current_version }}`).\n\nPlease update the version in the header if this represents a new release.\n\n*This is just a reminder - your PR can still be merged.*'
+          })
+    
+    - name: Success message
+      if: steps.version_check.outputs.version_updated == 'true'
+      run: |
+        echo "✅ Version updated to ${{ steps.version_check.outputs.current_version }}"
