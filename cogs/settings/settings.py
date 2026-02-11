@@ -3,7 +3,8 @@ import typing
 import discord
 from discord.ext import commands
 from discord import app_commands
-from database.data import RotiDatabase, TalkbackSettings, MusicSettings
+from cogs.generate.RotiBrain import RotiBrain
+from database.data import RotiDatabase, TalkbackSettings, MusicSettings, GenerateSettings
 from utils.RotiUtilities import cog_command
 
 @cog_command
@@ -12,6 +13,7 @@ class Settings(commands.GroupCog, group_name="settings"):
         super().__init__()
         self.bot = bot
         self.db = RotiDatabase()
+        self.brain = RotiBrain()
 
     talkback_group = app_commands.Group(name="talkback", description="Change the settings regarding the /talkback command.")
 
@@ -67,6 +69,49 @@ class Settings(commands.GroupCog, group_name="settings"):
         else:
             self.db.update(TalkbackSettings, server_id=interaction.guild_id, ai_probability=probability)
             await interaction.followup.send(f"Successfully set probability to randomly respond with an AI message to {probability}%")
+
+    generate_group = app_commands.Group(name="generate", description="Change the settings regarding the /generate command.")
+
+    @generate_group.command(name="default_model", description="Sets the default AI text model for this server.")
+    async def _generate_default_model(self, interaction: discord.Interaction, model_name: typing.Optional[str]):
+        """
+        Sets the default text generation model for the server.
+        Uses ephemeral responses to keep chat clean.
+        """
+        # Defer ephemerally
+        await interaction.response.defer(ephemeral=True)
+        
+        current = await self.db.select(GenerateSettings, server_id=interaction.guild_id)
+        
+        if model_name is None:
+            await interaction.followup.send(f"Current default model is: **{current.default_model}**")
+            return
+
+        # Validation
+        from cogs.generate.RotiBrain import RotiBrain
+        brain = RotiBrain()
+        
+        if model_name not in brain.text_models:
+            # Create a nice list of available models for the error message
+            available = ", ".join([f"`{name}`" for name in list(brain.text_models.keys())[:5]])
+            await interaction.followup.send(
+                f"❌ Invalid model name: `{model_name}`\n"
+                f"Available models include: {available}, and more.\n"
+                "Use the autocomplete suggestions to pick a valid model."
+            )
+            return
+
+        # Update setting
+        self.db.upsert(GenerateSettings, server_id=interaction.guild_id, default_model=model_name)
+        await interaction.followup.send(f"Successfully set default AI model to: **{model_name}**")
+
+    @_generate_default_model.autocomplete("model_name")
+    async def _generate_default_model_autocomplete(self, interaction: discord.Interaction, current: str) -> typing.List[app_commands.Choice[str]]:
+        models = list(self.brain.text_models.keys())
+        return [
+            app_commands.Choice(name=model, value=model)
+            for model in models if current.lower() in model.lower()
+        ][:25]
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Settings(bot))

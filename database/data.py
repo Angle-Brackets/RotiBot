@@ -3,6 +3,7 @@ import discord
 
 from supabase import acreate_client, AsyncClient
 from datetime import date
+import dataclasses
 from dataclasses import dataclass, fields, field, asdict
 from utils.Singleton import Singleton
 from typing import Dict, Any, List, Optional, Dict, Type, TypeVar, Final
@@ -50,6 +51,13 @@ class MusicSettings:
     speed: int = 100
     volume: int = 100
     pitch: int = 100
+
+@dataclass
+class GenerateSettings:
+    """Generate settings for a server."""
+    __tablename__ = "GenerateSettings"
+    server_id : int = field(metadata={"primary": True})
+    default_model : str = "gemini-fast"    
 
 @dataclass
 class QuotesTable:
@@ -128,7 +136,7 @@ class RotiDatabase(metaclass=Singleton):
     """
     This is a list of the tables in the supabase database. If you don't add a table here, it won't be registered.
     """
-    TABLES = [TalkbackSettings, MusicSettings, QuotesTable, MotdTable, TalkbacksTable, TalkbackTriggersTable]
+    TABLES = [TalkbackSettings, MusicSettings, GenerateSettings, QuotesTable, MotdTable, TalkbacksTable, TalkbackTriggersTable]
 
     def __init__(self):
         self.state = RotiState()
@@ -198,6 +206,27 @@ class RotiDatabase(metaclass=Singleton):
                 return field.name
         return "id" # Fallback default
 
+    def _should_use_defaults(self, cls: Type) -> bool:
+        """
+        Check if this dataclass should return default values when not found in database.
+        
+        Settings tables (TalkbackSettings, MusicSettings) have defaults and should return
+        an instance with default values. Data tables (Quotes, MOTD, etc.) should return None.
+        
+        Logic: A table should use defaults if all non-primary-key fields have default values.
+        """
+        all_fields = fields(cls)
+        for f in all_fields:
+            # Skip primary keys and init=False fields (like auto-generated IDs)
+            if f.metadata.get("primary") or not f.init:
+                continue
+            # Check if field has a default value
+            # dataclasses.MISSING is the sentinel value for no default
+            if f.default is dataclasses.MISSING and f.default_factory is dataclasses.MISSING:
+                # No default value defined
+                return False
+        return True
+
     def _dataclass_to_dict(self, obj: Any) -> Dict[str, Any]:
         """Convert dataclass to dict, excluding None values and primary key if auto-generated."""
         data = asdict(obj)
@@ -263,6 +292,10 @@ class RotiDatabase(metaclass=Singleton):
             delta = 1000 * (time.perf_counter() - start)
 
             if not result.data:
+                # Check if this dataclass should use defaults when not found
+                if self._should_use_defaults(dataclass_type):
+                    self.logger.info(f"No record found for {dataclass_type.__name__}, using defaults")
+                    return dataclass_type(**primary_key_kwargs)
                 return None
             
             self.logger.info(f"Single SELECT took {delta:.2f}ms")
@@ -270,6 +303,10 @@ class RotiDatabase(metaclass=Singleton):
             
         except Exception as e:
             self.logger.warning(f"Failed to select {dataclass_type.__name__}: {e}")
+            # On error, also attempt to return defaults for settings tables
+            if self._should_use_defaults(dataclass_type):
+                self.logger.info(f"Error during select, using defaults for {dataclass_type.__name__}")
+                return dataclass_type(**primary_key_kwargs)
             return None
     
     async def select_one(

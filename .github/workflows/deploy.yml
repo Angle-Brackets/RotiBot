@@ -64,6 +64,7 @@ jobs:
           --from-literal=YOUTUBE_NAME="${{ secrets.YOUTUBE_NAME }}" \
           --from-literal=YOUTUBE_PASS="${{ secrets.YOUTUBE_PASS }}" \
           --from-literal=YOUTUBE_REFRESH_TOKEN="${{ secrets.YOUTUBE_REFRESH_TOKEN }}" \
+          --from-literal=POLLINATIONS_KEY="${{ secrets.POLLINATIONS_KEY }}" \
           --dry-run=client -o yaml | kubectl apply -f -
 
     - name: Update deployment manifests with project ID

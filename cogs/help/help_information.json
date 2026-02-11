@@ -70,23 +70,23 @@
         "usage": "/disconnect (must be in a voice channel)",
         "arguments": {}
       },
-     "play": {
-       "description": "If the queue is empty, plays a new song, otherwise adds it to the queue.",
-       "usage": "/play [query] (must be in a voice channel)",
-       "arguments": {
-         "query": "A Youtube video or stream to be played by Roti."
-       }
-     },
-     "queue": {
-       "description": "Displays the current state of the music queue and the current song's remaining time. Queue is cleared when Roti is disconnected or when all users disconnect from a voice channel. Also displays visual icons for track controls.",
-       "usage": "/queue (must be in a voice channel)",
-       "arguments": {}
-     },
-     "pause": {
-       "description": "Pauses Roti and the Queue.",
-       "usage": "/pause (must be in a voice channel)",
-       "arguments": {}
-     },
+      "play": {
+        "description": "If the queue is empty, plays a new song, otherwise adds it to the queue.",
+        "usage": "/play [query] (must be in a voice channel)",
+        "arguments": {
+          "query": "A Youtube video or stream to be played by Roti."
+        }
+      },
+      "queue": {
+        "description": "Displays the current state of the music queue and the current song's remaining time. Queue is cleared when Roti is disconnected or when all users disconnect from a voice channel. Also displays visual icons for track controls.",
+        "usage": "/queue (must be in a voice channel)",
+        "arguments": {}
+      },
+      "pause": {
+        "description": "Pauses Roti and the Queue.",
+        "usage": "/pause (must be in a voice channel)",
+        "arguments": {}
+      },
       "resume": {
         "description": "Resumes Roti if it was paused.",
         "usage": "/resume (must be in a voice channel)",
@@ -163,6 +163,13 @@
         "usage": "/settings talkback ai_probability <probability>",
         "arguments": {
           "probability": "**OPTIONAL** argument to set the probability (an integer from 0 to 100) Roti will respond randomly to a message with an AI-response. If no argument is given it will return the current state and 0% probability disables random AI responses."
+        }
+      },
+      "generate default_model": {
+        "description": "Sets the default AI text model for this server. Use this to change which model is used when you don't specify one in /generate text.",
+        "usage": "/settings generate default_model [model_name]",
+        "arguments": {
+          "model_name": "**OPTIONAL** The name of the AI model to set as default. If omitted, shows the current default."
         }
       }
     }
@@ -290,7 +297,7 @@
         "description": "Roti will execute any code typed out inside of a text box and display the output. Be mindful that if your code has a large output or takes too long, Roti will exit early.",
         "usage": "/execute script [language]",
         "arguments": {
-          "language":"The programming language the file should execute with. There are many more than 25 languages, so try typing your favorite language!"
+          "language": "The programming language the file should execute with. There are many more than 25 languages, so try typing your favorite language!"
         }
       }
     }

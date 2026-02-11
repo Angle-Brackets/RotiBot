@@ -75,7 +75,7 @@ class Help(commands.Cog):
 
     @app_commands.command(name="changelog", description="Displays the latest changes to Roti!")
     async def _changelog(self, interaction : discord.Interaction):
-        await interaction.response.send_message(embed=self._generate_changelog_embed(), ephemeral=True, delete_after=10)
+        await interaction.response.send_message(embed=self._generate_changelog_embed(), ephemeral=True, delete_after=60)
     
     @_help.autocomplete("category")
     async def _help_autocomplete(self, interaction : discord.Interaction, current : str) -> List[app_commands.Choice]:
