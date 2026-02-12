@@ -11,7 +11,7 @@ import itertools
 
 from cogs.statistics.statistics_helpers import statistic
 from utils.RotiUtilities import cog_command
-from database.data import RotiDatabase, TalkbacksTable, TalkbackSettings
+from database.data import RotiDatabase, TalkbacksTable, TalkbackSettings, GenerateSettings
 from discord.ext import commands
 from discord import app_commands
 from cogs.generate.RotiBrain import RotiBrain
@@ -117,11 +117,15 @@ class Talkback(commands.GroupCog, group_name="talkback"):
                 formatted_messages.append(f"[MSG START] {username}: {content} [MSG END]")
             
             chat_history = "\n".join(formatted_messages)
+            gen_settings = await self.db.select(GenerateSettings, server_id=message.guild.id)
+
             response = await asyncio.to_thread(
                 self.brain.generate_ai_response, 
                 f"{message.author.display_name} said {message.content} to you! Respond with similar tone!", 
                 chat_history, 
-                msg_format
+                msg_format,
+                model=gen_settings.default_model,
+                temperature=gen_settings.temperature
             )
 
             if not response:

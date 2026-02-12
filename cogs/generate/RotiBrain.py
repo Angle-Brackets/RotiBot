@@ -87,13 +87,13 @@ class RotiBrain:
     
  
     @statistic(display_name="Generate Text", category="Generate")
-    def generate_ai_response(self, prompt : str, context : Optional[str], context_format : Optional[str], model = "gemini-fast") -> str | None:
+    def generate_ai_response(self, prompt : str, context : Optional[str], context_format : Optional[str], model = "gemini-fast", temperature : float = 1.0) -> str | None:
         """
         Generates an AI text response given the prompt and model.
         This function also takes in the context that you wish to give the bot for it to have a more intelligent response.
-
-        New API uses OpenAI-compatible /v1/chat/completions endpoint.
-        Default model is gemini-fast (free tier, fast responses).
+        
+        Temperature controls randomness (0.0 to 1.0). 
+        Default is 1.0 (balanced).
         """ 
         url = "https://gen.pollinations.ai/v1/chat/completions"
         
@@ -107,7 +107,8 @@ class RotiBrain:
                 {"role": "user", "content": self._inject_context(prompt, context, context_format)}
             ],
             "model": model,
-            "max_tokens": 2000
+            "max_tokens": 2000,
+            "temperature": temperature
         }
 
         headers = {

@@ -1,4 +1,4 @@
-# Roti Beta 1.0.1
+# Roti Beta 1.0.2
 
 A versatile Discord bot built with `discord.py` featuring AI generation, music playback, custom responses, and more!
 

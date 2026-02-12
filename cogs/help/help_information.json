@@ -166,10 +166,17 @@
         }
       },
       "generate default_model": {
-        "description": "Sets the default AI text model for this server. Use this to change which model is used when you don't specify one in /generate text.",
+        "description": "Sets the default AI text model for AI Talkbacks on this server. This does NOT affect /generate text.",
         "usage": "/settings generate default_model [model_name]",
         "arguments": {
-          "model_name": "**OPTIONAL** The name of the AI model to set as default. If omitted, shows the current default."
+          "model_name": "**OPTIONAL** The name of the AI model to set as default for talkbacks. If omitted, shows the current default."
+        }
+      },
+      "generate temperature": {
+        "description": "Sets the creativity/randomness of AI talkbacks (0.0 - 1.0).",
+        "usage": "/settings generate temperature <value>",
+        "arguments": {
+          "value": "**OPTIONAL** The temperature value from 0.0 (strict) to 1.0 (chaotic). Default is 1.0."
         }
       }
     }
