@@ -1,11 +1,9 @@
 {
-  "version": "Beta 1.0.1",
-  "summary": "🎨 Enhanced AI Generation with New Pollinations API",
+  "version": "Beta 1.0.2",
+  "summary": "🌡️ Turning up the heat with AI Temperature!",
   "changes": {
-    "🚀 Major Updates (1.0.1)": "- **Migrated to new Pollinations API** (`gen.pollinations.ai`) with authentication\n- **19 free text models** now available (previously 1) including Gemini, Claude, DeepSeek, and more\n- **9 free image models** including Flux, Imagen, and more\n- **Faster AI responses** with new `gemini-fast` default model\n- **Configurable default AI model** per server via `/settings generate default_model`\n- **Better error handling** with timeout protection and detailed logging\n- **Centralized credential management** via BotCredentials singleton",
-    "✨ Improvements (1.0.1)": "- AI talkbacks now use Google Gemini 2.5 Flash Lite for better conversations\n- Model autocomplete now shows all available free models\n- Image generation excludes video models for cleaner selection\n- GitHub Actions workflow updated for automated secret management\n- Fixed `/generate waifu` command to use correct API endpoint",
-    "⚙️ Technical (1.0.1)": "- Added Bearer token authentication for API requests\n- Implemented model filtering to exclude paid-only options\n- Updated credential pattern with `RotiState().credentials.pollinations_key`\n- Enhanced `/generate text` to properly pass model parameter",
-    "📦 Major Features (1.0)": "- Migrated all functions and database to Supabase\n- `/motd` now is *per user* rather than per-server\n- `/wikipedia` has richer UI for navigating disambiguations\n- General UI improvements for `/quote` and `/talkback`\n- Many commands now properly ephemeral\n- Performance improvements from major refactoring",
-    "🐛 Bug Fixes (1.0)": "- Fixed talkbacks resulting in blank responses\n- Fixed quote list filtering\n- Fixed `/wikipedia` not working\n- Removed Herobrine"
+    "🔥 New Features": "- **AI Temperature Control**: You can now set the randomness of AI talkbacks via `/settings generate temperature` (0.0 - 1.0). Default is 1.0.\n- **Changelog History**: You can now look back at Roti's history with the new browsing buttons in `/changelog`!",
+    "🛠️ Improvements": "- **Refactored Default Model**: The `/settings generate default_model` setting now ONLY applies to AI Talkbacks. The `/generate text` command will use the internal default (Gemini Fast) if no model is specified.\n- **AI Talkback Logic**: AI Talkbacks now respect both your server's chosen model AND temperature setting.",
+    "🐛 Bug Fixes": "- Fixed issue where `/generate text` was incorrectly falling back to server default model instead of being independent."
   }
 }

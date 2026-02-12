@@ -105,6 +105,24 @@ class Settings(commands.GroupCog, group_name="settings"):
         self.db.upsert(GenerateSettings, server_id=interaction.guild_id, default_model=model_name)
         await interaction.followup.send(f"Successfully set default AI model to: **{model_name}**")
 
+    @generate_group.command(name="temperature", description="Sets the creativity/randomness of AI talkbacks (0.0 - 1.0).")
+    async def _generate_temperature(self, interaction: discord.Interaction, value: typing.Optional[app_commands.Range[float, 0.0, 1.0]]):
+        """
+        Sets the temperature for AI talkbacks.
+        0.0 = Strict/Deterministic
+        1.0 = Random/Creative/Chaotic
+        """
+        await interaction.response.defer(ephemeral=True)
+        
+        current = await self.db.select(GenerateSettings, server_id=interaction.guild_id)
+        
+        if value is None:
+            await interaction.followup.send(f"Current AI temperature is: **{current.temperature:.1f}**")
+            return
+
+        self.db.upsert(GenerateSettings, server_id=interaction.guild_id, temperature=value)
+        await interaction.followup.send(f"Successfully set AI talkback temperature to: **{value:.1f}**")
+
     @_generate_default_model.autocomplete("model_name")
     async def _generate_default_model_autocomplete(self, interaction: discord.Interaction, current: str) -> typing.List[app_commands.Choice[str]]:
         models = list(self.brain.text_models.keys())

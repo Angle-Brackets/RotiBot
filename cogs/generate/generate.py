@@ -62,11 +62,6 @@ class Generate(commands.GroupCog, group_name = "generate"):
     async def _gen_text(self, interaction : discord.Interaction, prompt : str, model : Optional[str]):
         await interaction.response.defer()
         
-        # If model is not specified, check settings
-        if model is None:
-            settings = await self.db.select(GenerateSettings, server_id=interaction.guild_id)
-            model = settings.default_model
-
         # Use the model parameter if provided, otherwise defaults to gemini-fast in RotiBrain
         response : str | None = await asyncio.to_thread(self.brain.generate_ai_response, prompt, None, None, model)
         if not response:

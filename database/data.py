@@ -57,7 +57,8 @@ class GenerateSettings:
     """Generate settings for a server."""
     __tablename__ = "GenerateSettings"
     server_id : int = field(metadata={"primary": True})
-    default_model : str = "gemini-fast"    
+    default_model : str = "gemini-fast"
+    temperature : float = 0.9
 
 @dataclass
 class QuotesTable:

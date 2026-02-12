@@ -53,6 +53,13 @@ class Help(commands.Cog):
         with open(os.path.join(self._current_dir, "changelog.json"), mode="r") as file:
             self.changelog = json.loads(file.read())
 
+        self.old_changelog = []
+        try:
+            with open(os.path.join(self._current_dir, "old_changelog.json"), mode="r") as file:
+                self.old_changelog = json.loads(file.read())
+        except FileNotFoundError:
+            self.logger.warning("old_changelog.json not found.")
+
     """
     This command is a global command for listing all of the help information.
     """
@@ -75,7 +82,11 @@ class Help(commands.Cog):
 
     @app_commands.command(name="changelog", description="Displays the latest changes to Roti!")
     async def _changelog(self, interaction : discord.Interaction):
-        await interaction.response.send_message(embed=self._generate_changelog_embed(), ephemeral=True, delete_after=60)
+        # Combine current and old changelogs for the view
+        all_changelogs = [self.changelog] + self.old_changelog
+        view = ChangelogNav(all_changelogs)
+        await interaction.response.send_message(embed=self._generate_changelog_embed(self.changelog), view=view, ephemeral=True, delete_after=60)
+        view.message = await interaction.original_response()
     
     @_help.autocomplete("category")
     async def _help_autocomplete(self, interaction : discord.Interaction, current : str) -> List[app_commands.Choice]:
@@ -185,11 +196,12 @@ class Help(commands.Cog):
         return _generate_pages()
 
 
-    def _generate_changelog_embed(self):
-        embed = discord.Embed(title="Changelog for Roti " + self.changelog["version"], description=self.changelog["summary"], color=0xecc98e)
+    @staticmethod
+    def _generate_changelog_embed(entry):
+        embed = discord.Embed(title="Changelog for Roti " + entry["version"], description=entry["summary"], color=0xecc98e)
 
         count = 1
-        for change_title, change in self.changelog["changes"].items():
+        for change_title, change in entry["changes"].items():
             embed.add_field(name=f"{count}. " + change_title, value=change, inline=False)
             count += 1
 
@@ -277,6 +289,50 @@ class HelpNav(discord.ui.View):
 
     async def on_timeout(self) -> None:
         await self.message.delete()
+        self.stop()
+
+class ChangelogNav(discord.ui.View):
+    def __init__(self, changelogs: List[Dict]):
+        super().__init__(timeout=60)
+        self.changelogs = changelogs
+        self.current_index = 0
+        self.message: Optional[discord.Message] = None
+
+        # Update button states initially
+        self._update_buttons()
+
+    def _update_buttons(self):
+        # Disable "Newer" if we are at the newest (index 0)
+        # Note: If there's only 1 page, both are disabled
+        self._newer.disabled = (self.current_index == 0)
+        # Disable "Older" if we are at the oldest (index len-1)
+        self._older.disabled = (self.current_index == len(self.changelogs) - 1)
+
+    async def _update_message(self, interaction: discord.Interaction):
+        self._update_buttons()
+        embed = Help._generate_changelog_embed(self.changelogs[self.current_index])
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label='Newer', style=discord.ButtonStyle.primary)
+    async def _newer(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_index > 0:
+            self.current_index -= 1
+            await self._update_message(interaction)
+        else:
+            await interaction.response.defer()
+
+    @discord.ui.button(label='Older', style=discord.ButtonStyle.primary)
+    async def _older(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_index < len(self.changelogs) - 1:
+            self.current_index += 1
+            await self._update_message(interaction)
+        else:
+            await interaction.response.defer()
+            
+    async def on_timeout(self) -> None:
+        try:
+            if self.message: await self.message.delete()
+        except: pass
         self.stop()
 
 async def setup(bot : commands.Bot):

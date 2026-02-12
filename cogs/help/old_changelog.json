@@ -1,0 +1,96 @@
+[
+  {
+    "version": "Beta 1.0.1",
+    "summary": "\ud83c\udfa8 Enhanced AI Generation (1.0.1)",
+    "changes": {
+      "\ud83d\ude80 \ud83d\ude80 Major Updates": "- **Migrated to new Pollinations API** (`gen.pollinations.ai`) with authentication\n- **19 free text models** now available (previously 1) including Gemini, Claude, DeepSeek, and more\n- **9 free image models** including Flux, Imagen, and more\n- **Faster AI responses** with new `gemini-fast` default model\n- **Configurable default AI model** per server via `/settings generate default_model`\n- **Better error handling** with timeout protection and detailed logging\n- **Centralized credential management** via BotCredentials singleton",
+      "\u2728 \u2728 Improvements": "- AI talkbacks now use Google Gemini 2.5 Flash Lite for better conversations\n- Model autocomplete now shows all available free models\n- Image generation excludes video models for cleaner selection\n- GitHub Actions workflow updated for automated secret management\n- Fixed `/generate waifu` command to use correct API endpoint",
+      "\ud83d\udcdd \u2699\ufe0f Technical": "- Added Bearer token authentication for API requests\n- Implemented model filtering to exclude paid-only options\n- Updated credential pattern with `RotiState().credentials.pollinations_key`\n- Enhanced `/generate text` to properly pass model parameter"
+    }
+  },
+  {
+    "version": "Beta 1.0",
+    "summary": "\ud83d\ude80 Finally Beta! (1.0)",
+    "changes": {
+      "\ud83d\ude80 Major features": "-Migrated all functions and database to supabase.\n-/motd now is *per user* rather than per-server, so each person can add an MOTD!\n-/wikipedia now has a richer UI for navigating disambiguations.\n-General UI improvements for /quote and /talkback.\n-Made a lot of commands that should've been ephemeral in the past ephemeral now.\n-Performance improvements from every major command being refactored.",
+      "\ud83d\udc1b Bug Fixes": "-Fixed bug where talkbacks could result in blank response lists.\n-Fixed bug where quote list wasn't filtered correctly.\n-Fixed /wikipedia not working.\n-Removed Herobrine."
+    }
+  },
+  {
+    "version": "Alpha 1.9.9",
+    "summary": "\ud83d\udc1b Before Beta x4! (1.9.9)",
+    "changes": {
+      "\ud83d\ude80 Major features": "-Readded /skip command for music playback.\n-Updated /help music to not say that music is broken still.\n-Music queue is capped at 100 songs at a time to save on RAM resources.",
+      "\ud83d\udc1b Bug Fixes": "-Fixed AI talkbacks and /generate text, though they are limited to only using the openai API due to changes with the service."
+    }
+  },
+  {
+    "version": "Alpha 1.9.8",
+    "summary": "\ud83c\udfb5 Music Engine Update (1.9.8)",
+    "changes": {
+      "\ud83d\ude80 Major features": "No new features in this release, but the music engine has been migrated from wavelink.py to lavalink.py internally due to the former being unmaintained now. This should result in better stability with music in addition to Lavalink getting its own dedicated pod now.",
+      "\u2699\ufe0f Internal Updates": "Migrated to Google Kubernetes Engine and a fully integrated CI/CD pipeline for Roti! So hopefully no more annoying last-minute manual VM fixes.",
+      "\ud83d\udc1b Bug Fixes": "-Fixed bug where AI responses just..stopped working.\n-Fixed bug where MOTD shuffling stopped working."
+    }
+  },
+  {
+    "version": "Alpha 1.9.6",
+    "summary": "\u26a1 Performance & Stats (1.9.6)",
+    "changes": {
+      "\u2699\ufe0f Internal Updates": "-Optimized Database Writes and Reads, though there is a planned migration to SQL soon.\n-Refactoring of entire command structure internally.\nDatabase writes are done asyncronously now.\n-Better logging\n-Optimized lookups for talkbacks planned, added Bloom Filter code for this\n-Roti's State is now in a Singleton object, easier to manage and add to.\n-Added TTL caching for some expensive commands.",
+      "\ud83d\ude80 Features": "-Added a new /statistic command to view performance and usage stats for Roti globally.\n-Added a better talking indicator when Roti is responding with an AI message.\n-AI requests are now queued rather than just hard-blocking requests and are handled asyncronously.",
+      "\ud83d\udc1b Bugs": "-Fixed AI Schema being outdated due to an update.\n-Talkbacks are generally more reliable and easier to reason.\n-Fixed very old bug where talkbacks could have completely empty response or trigger fields due to auto-merging.\n-I probably forgot multiple bugs I fixed."
+    }
+  },
+  {
+    "version": "Alpha 1.9.5",
+    "summary": "\ud83d\udde3\ufe0f Talkback Stability (1.9.5)",
+    "changes": {
+      "\u2699\ufe0f Internal Updates": "-Optimized talkback generation for both standard and AI talkbacks to be far more reliable.\n-Optimized code execution with /execute.",
+      "\ud83d\ude80 Features": "-Standard and AI talkbacks are way more reliable now.\n-Added a talking indicator to Roti whenever he is about to respond with an AI message.\n-Added a \"Keep\" Button to Roti to now Keep talkbacks to prevent auto-deletion of talkbacks.",
+      "\ud83d\udc1b Bugs": "-Patched bug with /settings talkback ai_probability 0 being ignored.\n-Patched bug with JSON response showing with AI talkback.\n-Patched bug with AI responses randomly dropping or failing."
+    }
+  },
+  {
+    "version": "Alpha 1.9.4",
+    "summary": "\u2699\ufe0f AI Settings (1.9.4)",
+    "changes": {
+      "\u2699\ufe0f Internal Updates": "-Reorganized all AI features into a new class for cross-command support",
+      "\ud83d\ude80 Features": "-Roti can now generate text responses from prompts, use /generate text!\n-/settings talkback probability also affects the chance of random AI responses, set to 0 to completely disable them.\n-Roti has AI-powered talkbacks now, randomly or when pinged/replied to, Roti will respond with some response related to the conversation to be a *little* more annoying. ;)\n-You can adjust how frequently you'd like Roti to respond to you using the /settings talkback ai_probability command now."
+    }
+  },
+  {
+    "version": "Alpha 1.9.3",
+    "summary": "\ud83d\udd25 AI Snarkiness + Hotfix (1.9.3)",
+    "changes": {
+      "\u2699\ufe0f Internal Updates": "-Reorganized all AI features into a new class for cross-command support",
+      "\ud83d\ude80 Features": "-Roti can now generate text responses from prompts, use /generate text!\n-/settings talkback probability also affects the chance of random AI responses, set to 0 to completely disable them.\n-Roti has AI-powered talkbacks now, randomly or when pinged/replied to, Roti will respond with some response related to the conversation to be a *little* more annoying. ;)",
+      "\ud83d\udd25 Hotfix": "-Added a cooldown to the AI talkback to not overload the API in cases where talkbacks are near 100%.\n-Fixed serious bug with chat histories not being tracked correctly."
+    }
+  },
+  {
+    "version": "Alpha 1.9.2",
+    "summary": "\ud83c\udf36\ufe0f AI Snarkiness (1.9.2)",
+    "changes": {
+      "\u2699\ufe0f Internal Updates": "-Reorganized all AI features into a new class for cross-command support",
+      "\ud83d\ude80 Features": "-Roti can now generate text responses from prompts, use /generate text!\n-/settings talkback probability also affects the chance of random AI responses, set to 0 to completely disable them.\n-Roti has AI-powered talkbacks now, randomly or when pinged/replied to, Roti will respond with some response related to the conversation to be a *little* more annoying. ;)",
+      "\ud83d\udd25 Hotfix": "-Added a cooldown to the AI talkback to not overload the API in cases where talkbacks are near 100%."
+    }
+  },
+  {
+    "version": "Alpha 1.9.1",
+    "summary": "\ud83e\udd16 AI Text Generation (1.9.1)",
+    "changes": {
+      "\u2699\ufe0f Internal Updates": "-Reorganized all AI features into a new class for cross-command support",
+      "\ud83d\ude80 Features": "-Roti can now generate text responses from prompts, use /generate text!\n-/settings talkback probability also affects the chance of random AI responses, set to 0 to completely disable them.\n-Roti has AI-powered talkbacks now, randomly or when pinged/replied to, Roti will respond with some response related to the conversation to be a *little* more annoying. ;)"
+    }
+  },
+  {
+    "version": "Alpha 1.9",
+    "summary": "\ud83d\udcbb Code Execution (1.9)",
+    "changes": {
+      "\u2699\ufe0f Internal Updates": "-Stability Improvements (aka fixing bad code)",
+      "\ud83d\ude80 Features": "-Roti can now execute code provided through a file or typed in a modal!\n-Use /execute to enter code, /help for more information."
+    }
+  }
+]
