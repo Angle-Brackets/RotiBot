@@ -144,10 +144,10 @@ spec:
         resources:
           requests:
             memory: "256Mi"
-            cpu: "150m"
+            cpu: "250m"
           limits:
             memory: "512Mi"
-            cpu: "400m"
+            cpu: "500m"
       volumes:
       - name: config
         configMap:
