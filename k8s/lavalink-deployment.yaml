@@ -22,7 +22,6 @@ data:
           url: "https://cipher.kikkia.dev/"
         clients:
           - TV
-          - TVHTML5EMBEDDED
           - WEB
           - MWEB
           - WEBEMBEDDED
@@ -30,10 +29,6 @@ data:
           - ANDROID_VR
           - ANDROID_MUSIC
           - IOS
-        TVHTML5EMBEDDED:
-          playlistLoading: false 
-          videoLoading: false 
-          searching: false
         oauth:
           enabled: true
           refreshToken: "${YOUTUBE_REFRESH_TOKEN}"
@@ -149,10 +144,10 @@ spec:
         resources:
           requests:
             memory: "256Mi"
-            cpu: "250m"
+            cpu: "150m"
           limits:
             memory: "512Mi"
-            cpu: "500m"
+            cpu: "400m"
       volumes:
       - name: config
         configMap:
