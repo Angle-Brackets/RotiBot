@@ -92,7 +92,6 @@ class Talkback(commands.GroupCog, group_name="talkback"):
             return Some(response)
         return Nothing
 
-    # TODO: CHECK AI! This function remains largely untouched as requested.
     @statistic("AI Talkbacks", category="Talkbacks")
     async def _generate_ai_talkback(self, message : discord.Message) -> Result[str, TalkbackError]:
         async with message.channel.typing():
@@ -102,28 +101,41 @@ class Talkback(commands.GroupCog, group_name="talkback"):
 
             if time_since_last < self.cooldown:
                 self.logger.info(f"AI Response requested too quickly for {message.guild.name}. Sleeping...")
-                time.sleep(self.cooldown - time_since_last)
+                await asyncio.sleep(self.cooldown - time_since_last) 
 
             self.last_response = time.time()
             
-            # [AI LOGIC PRESERVED FROM ORIGINAL FILE]
+            # Fetch history
             history : typing.List[discord.Message] = [msg async for msg in channel.history(limit=HISTORY_LIMIT)]
             formatted_messages = []
-            msg_format = "THE CONTEXT FOLLOWS THE FORMAT [MSG START] USERNAME: MESSAGE_CONTENTS [MSG END]..."
 
             for msg in reversed(history):
-                username = msg.author.display_name
-                content = msg.content or "[NO CONTENT]" 
-                formatted_messages.append(f"[MSG START] {username}: {content} [MSG END]")
+                # Skip bot messages, UNLESS it's Roti
+                if msg.author.bot and msg.author.id != self.bot.user.id:
+                    continue
+
+                content = msg.content or "[Attachment/Embed]" 
+                
+                if msg.author.id == self.bot.user.id:
+                    # If Roti sent the message, assign it the "assistant" role
+                    formatted_messages.append({
+                        "role": "assistant", 
+                        "content": content
+                    })
+                else:
+                    # If a user sent it, assign "user" role and prepend their real username
+                    # We use msg.author.name instead of msg.author.display_name
+                    username = msg.author.name
+                    formatted_messages.append({
+                        "role": "user", 
+                        "content": f"{username} said: {content}"
+                    })
             
-            chat_history = "\n".join(formatted_messages)
             gen_settings = await self.db.select(GenerateSettings, server_id=message.guild.id)
 
             response = await asyncio.to_thread(
-                self.brain.generate_ai_response, 
-                f"{message.author.display_name} said {message.content} to you! Respond with similar tone!", 
-                chat_history, 
-                msg_format,
+                self.brain.generate_chat,
+                chat_messages=formatted_messages, 
                 model=gen_settings.default_model,
                 temperature=gen_settings.temperature
             )

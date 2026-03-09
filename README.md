@@ -1,4 +1,4 @@
-# Roti Beta 1.0.2
+# Roti Beta 1.0.3
 
 A versatile Discord bot built with `discord.py` featuring AI generation, music playback, custom responses, and more!
 
@@ -109,7 +109,7 @@ View global usage and performance metrics for Roti.
 ## 💡 About
 
 **Created by**: @soupa.  
-**Version**: Beta 1.0.1  
+**Version**: Beta 1.0.3  
 **Repository**: [github.com/Angle-Brackets/RotiBot](https://github.com/Angle-Brackets/RotiBot)
 
 Roti is continuously updated with new features and improvements. Star the repository to stay updated!

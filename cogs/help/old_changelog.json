@@ -1,5 +1,14 @@
 [
   {
+    "version": "Beta 1.0.2",
+    "summary": "🌡️ Turning up the heat with AI Temperature!",
+    "changes": {
+      "🔥 New Features": "- **AI Temperature Control**: You can now set the randomness of AI talkbacks via `/settings generate temperature` (0.0 - 1.0). Default is 1.0.\n- **Changelog History**: You can now look back at Roti's history with the new browsing buttons in `/changelog`!",
+      "🛠️ Improvements": "- **Refactored Default Model**: The `/settings generate default_model` setting now ONLY applies to AI Talkbacks. The `/generate text` command will use the internal default (Gemini Fast) if no model is specified.\n- **AI Talkback Logic**: AI Talkbacks now respect both your server's chosen model AND temperature setting.",
+      "🐛 Bug Fixes": "- Fixed issue where `/generate text` was incorrectly falling back to server default model instead of being independent."
+    }
+  },
+  {
     "version": "Beta 1.0.1",
     "summary": "\ud83c\udfa8 Enhanced AI Generation (1.0.1)",
     "changes": {
