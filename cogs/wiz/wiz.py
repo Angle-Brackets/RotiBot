@@ -90,12 +90,12 @@ class Wiz(commands.GroupCog, group_name="wiz"):
                                      f"**Boost:** {bs.incoming_boost or 'None'}\n" \
                                      f"**Resist:** {bs.incoming_resist or 'None'}\n" \
                                      + " • ".join(traits)
-                        self.container.add_item(discord.ui.TextDisplay("### ⚔️ Combat Intelligence\n" + stat_block))
+                        self.container.add_item(discord.ui.TextDisplay("### ⚔️ Combat Stats\n" + stat_block))
 
                     # Relationships (Allies/Location)
                     rel_text = f"**Location:** [{c.location.name}]({c.location.url})\n" if c.location else ""
                     if c.allies:
-                        rel_text += f"**Common Allies:** {outer._format_view_list(c.allies)}"
+                        rel_text += f"**Allies:** {outer._format_view_list(c.allies)}"
                     if rel_text:
                         self.container.add_item(discord.ui.TextDisplay("### 👥 World Presence\n" + rel_text))
 
@@ -130,31 +130,131 @@ class Wiz(commands.GroupCog, group_name="wiz"):
             class SpellLayout(discord.ui.LayoutView):
                 def __init__(self, s, c_url, a_url, outer):
                     super().__init__()
-                    self.container = discord.ui.Container(accent_color=0x3498db)
-                    header = f"## 🪄 {s.name}\n{s.description or 'No description available.'}"
-                    
-                    if c_url:
-                        self.container.add_item(discord.ui.Section(header, accessory=discord.ui.Thumbnail(c_url)))
-                    else:
-                        self.container.add_item(discord.ui.TextDisplay(header))
 
-                    specs = f"**School:** {s.school} | **Pips:** {s.pip_cost} | **Acc:** {s.accuracy}%"
-                    self.container.add_item(discord.ui.TextDisplay(specs))
+                    self.container = discord.ui.Container(accent_color=0x8e44ad)
+
+                    # Header
+                    header = f"## 🪄 {s.name}"
+                    desc = s.description or "*No description available.*"
+
+                    if c_url:
+                        self.container.add_item(
+                            discord.ui.Section(
+                                f"{header}\n{desc}",
+                                accessory=discord.ui.Thumbnail(c_url)
+                            )
+                        )
+                    else:
+                        self.container.add_item(discord.ui.TextDisplay(f"{header}\n{desc}"))
+
+                    # --- Core Stats ---
+                    pvp_icon = "⚔️ PvP" if s.is_pvp else "🕊️ PvE Only"
+                    school = s.school or "Unknown"
+
+                    stats = (
+                        f"### 📊 Spell Stats\n"
+                        f"🏫 **School:** {school}\n"
+                        f"⚡ **Pip Cost:** {s.pip_cost or '—'}\n"
+                        f"✨ **School Pips:** {s.school_pip_cost or '—'}\n"
+                        f"🎯 **Accuracy:** {s.accuracy or '—'}\n"
+                        f"⚖️ **Mode:** {pvp_icon}"
+                    )
+
+                    self.container.add_item(discord.ui.TextDisplay(stats))
+
+                    # Spell type icons
+                    if s.type_icons:
+                        types = " • ".join(s.type_icons)
+                        self.container.add_item(
+                            discord.ui.TextDisplay(f"🧩 **Spell Type:** {types}")
+                        )
+
                     self.container.add_item(discord.ui.Separator())
 
+                    # --- Animation ---
                     if a_url:
-                        self.container.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(a_url, description="Spell Cast Animation")))
+                        self.container.add_item(
+                            discord.ui.MediaGallery(
+                                discord.MediaGalleryItem(
+                                    a_url,
+                                    description="Spell Cast Animation"
+                                )
+                            )
+                        )
 
-                    if s.trained_from:
-                        self.container.add_item(discord.ui.TextDisplay(f"**Trained From:** {outer._format_view_list(s.trained_from)}"))
+                    # --- Training Info ---
+                    if s.can_be_trained or s.trainers:
+                        train_text = "### 🎓 Training"
+
+                        if s.training_points_cost:
+                            train_text += f"\n💠 **Cost:** {s.training_points_cost} Training Points"
+
+                        if s.trainers:
+                            trainers = "\n".join(
+                                f"• **[{t.name}]({t.url})**"
+                                for t in s.trainers[:5]
+                            )
+                            train_text += f"\n👤 **Trainers:**\n{trainers}"
+
+                        if s.training_requirements:
+                            train_text += f"\n📜 **Requirements:** {s.training_requirements}"
+
+                        self.container.add_item(discord.ui.TextDisplay(train_text))
+
+                    # --- Prerequisite Spells ---
+                    # TODO: Implement this when its fixed!
+                    # if s.prerequisites:
+                    #     prereqs = "\n".join(
+                    #         f"• **[{p.name}]({p.url})**"
+                    #         for p in s.prerequisites[:6]
+                    #     )
+
+                    #     self.container.add_item(
+                    #         discord.ui.TextDisplay(
+                    #             f"### 🔗 Prerequisite Spells\n{prereqs}"
+                    #         )
+                    #     )
+
+                    # --- Quest Acquisition ---
+                    if s.acquisition_sources:
+                        quests = "\n".join(
+                            f"• **[{q.name}]({q.url})**"
+                            for q in s.acquisition_sources[:8]
+                        )
+
+                        self.container.add_item(
+                            discord.ui.TextDisplay(
+                                f"### 📜 Quest Rewards\n{quests}"
+                            )
+                        )
+
+                    # --- Spellement Info ---
+                    if s.spellement_acquirable:
+                        self.container.add_item(
+                            discord.ui.TextDisplay(
+                                "🧬 **Spellement Upgrade Available**"
+                            )
+                        )
 
                     self.add_item(self.container)
-                    self.add_item(discord.ui.ActionRow(discord.ui.Button(label="View on Wiki", url=s.url)))
+
+                    # Footer button
+                    self.add_item(
+                        discord.ui.ActionRow(
+                            discord.ui.Button(
+                                label="View on Wiki",
+                                url=s.url
+                            )
+                        )
+                    )
+
+                    print(s)
 
             msg = {"view": SpellLayout(s, c_url, a_url, self)}
             if files: msg["files"] = files
             await interaction.followup.send(**msg)
-        except Exception:
+        except Exception as e:
+            self.logger.exception(f"Spell error: {e}")
             await interaction.followup.send("❌ Spell not found.", ephemeral=True)
 
     @app_commands.command(name="item", description="Full stats and source info for an item.")
@@ -210,23 +310,18 @@ class Wiz(commands.GroupCog, group_name="wiz"):
                 def __init__(self, r, outer):
                     super().__init__()
                     self.container = discord.ui.Container(accent_color=0x9b59b6)
-                    self.container.add_item(discord.ui.TextDisplay(f"## 🧪 Recipe: {r.name}\n**Category:** {r.recipe_type}"))
+                    self.container.add_item(discord.ui.TextDisplay(f"## 🧪 Recipe: {r.name}\n**Station:** {r.crafting_station}"))
                     
                     if r.ingredients:
                         ing = "\n".join([f"• x{count} **{name}**" for name, count in r.ingredients.items()])
                         self.container.add_item(discord.ui.TextDisplay("### 📦 Ingredients\n" + ing))
-                    
-                    if r.crafts:
-                        self.container.add_item(discord.ui.TextDisplay(f"### 🛠️ Crafts\n{outer._format_view_list(r.crafts)}"))
-                    
-                    if r.vendors:
-                        self.container.add_item(discord.ui.TextDisplay(f"### 🏪 Vendors\n{outer._format_view_list(r.vendors)}"))
 
                     self.add_item(self.container)
                     self.add_item(discord.ui.ActionRow(discord.ui.Button(label="Wiki Page", url=r.url)))
 
             await interaction.followup.send(view=RecipeLayout(r, self))
-        except Exception:
+        except Exception as e:
+            self.logger.exception(f"Recipe error: {e}")
             await interaction.followup.send("❌ Recipe not found.", ephemeral=True)
 
     @app_commands.command(name="location", description="Details about a world or area.")
@@ -234,21 +329,108 @@ class Wiz(commands.GroupCog, group_name="wiz"):
         await interaction.response.defer()
         try:
             loc = await wizwiki.location(name)
-            
+
+            map_file = None
+            map_url = None
+            if loc.map_url:
+                map_file, map_url = await self._fetch_as_file(loc.map_url, "map.png")
+
             class LocationLayout(discord.ui.LayoutView):
-                def __init__(self, l, outer):
+                def __init__(self, l: wizwiki.Location, map_url, outer):
                     super().__init__()
+
                     self.container = discord.ui.Container(accent_color=0xe67e22)
-                    self.container.add_item(discord.ui.TextDisplay(f"## 📍 {l.name}\n**World:** {l.world or 'Spiral'}"))
-                    
-                    if l.areas:
-                        self.container.add_item(discord.ui.TextDisplay("### 🏘️ Sub-areas\n" + outer._format_view_list(l.areas)))
+
+                    # --- Header ---
+                    header = f"## 📍 {l.name}"
+                    desc = l.description or "*No description available.*"
+
+                    if map_url:
+                        self.container.add_item(
+                            discord.ui.Section(
+                                f"{header}\n{desc}",
+                                accessory=discord.ui.Thumbnail(map_url)
+                            )
+                        )
+                    else:
+                        self.container.add_item(
+                            discord.ui.TextDisplay(f"{header}\n{desc}")
+                        )
+
+                    self.container.add_item(discord.ui.Separator())
+
+                    # --- Parent Locations ---
+                    if l.parents:
+                        parents = "\n".join(
+                            f"• **[{p.name}]({p.url})**"
+                            for p in l.parents[:5]
+                        )
+
+                        self.container.add_item(
+                            discord.ui.TextDisplay(
+                                f"### 🌍 Parent Locations\n{parents}"
+                            )
+                        )
+
+                    # --- Sub Areas ---
+                    if l.sublocations:
+                        subs = "\n".join(
+                            f"• **[{s.name}]({s.url})**"
+                            for s in l.sublocations[:10]
+                        )
+
+                        self.container.add_item(
+                            discord.ui.TextDisplay(
+                                f"### 🏘️ Sub-Areas\n{subs}"
+                            )
+                        )
+
+                    # --- Connections ---
+                    if l.connections:
+                        conns = "\n".join(
+                            f"• **[{c.name}]({c.url})**"
+                            for c in l.connections[:10]
+                        )
+
+                        self.container.add_item(
+                            discord.ui.TextDisplay(
+                                f"### 🧭 Connected Locations\n{conns}"
+                            )
+                        )
+
+                    # --- Map ---
+                    if map_url:
+                        self.container.add_item(discord.ui.Separator())
+
+                        self.container.add_item(
+                            discord.ui.MediaGallery(
+                                discord.MediaGalleryItem(
+                                    map_url,
+                                    description="Area Map"
+                                )
+                            )
+                        )
 
                     self.add_item(self.container)
-                    self.add_item(discord.ui.ActionRow(discord.ui.Button(label="Visit Wiki", url=l.url)))
 
-            await interaction.followup.send(view=LocationLayout(loc, self))
-        except Exception:
+                    # Footer
+                    self.add_item(
+                        discord.ui.ActionRow(
+                            discord.ui.Button(
+                                label="View on WizWiki",
+                                url=l.url
+                            )
+                        )
+                    )
+
+            msg = {"view": LocationLayout(loc, map_url, self)}
+            if map_file:
+                msg["file"] = map_file
+
+            await interaction.followup.send(**msg)
+
+        except Exception as e:
+            self.logger.exception(f"Location error: {e}")
             await interaction.followup.send("❌ Location not found.", ephemeral=True)
 
 async def setup(bot: commands.Bot):
