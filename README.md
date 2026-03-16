@@ -1,6 +1,6 @@
-# Roti Beta 1.0.2
+# Roti Beta 1.1.0
 
-A versatile Discord bot built with `discord.py` featuring AI generation, music playback, custom responses, and more!
+A versatile Discord bot built with `discord.py` featuring AI generation, music playback, custom responses, Wizard101 wiki lookups, and more!
 
 **[Invite Roti to your server](https://bit.ly/3rNbV72)** | [View on GitHub](https://github.com/Angle-Brackets/RotiBot)
 
@@ -61,7 +61,16 @@ Store, retrieve, and modify memorable quotes from your server.
 
 **Example**: Save `"Hello {0}"` as a quote, then say it with any name!
 
-### 🏭 AI Generation
+### 🧙 Wizard101 Wiki
+Quick access to Wizard101 wiki information powered by **[WizWiki](https://github.com/Angle-Brackets/WizWiki)**.
+
+- View creature stats, cheats, and drops with paginated display
+- Look up spell details and training information
+- Find item stats and drop sources
+- Check crafting recipes and locations
+- School-aware color coding and emoji icons
+
+### 🔥 AI Generation
 Powered by the **new Pollinations API** with 19 text models and 9 image models!
 
 - **Text Generation**: Choose from models like Gemini, Claude, DeepSeek, Mistral, and more
@@ -95,7 +104,7 @@ View global usage and performance metrics for Roti.
 1. **[Invite Roti](https://bit.ly/3rNbV72)** to your Discord server
 2. Use `/help` to explore all available commands
 3. Check `/changelog` to see the latest updates
-4. Start with `/talkback add`, `/generate image`, or `/play` to try key features!
+4. Start with `/wiz`, `/talkback add`, `/generate image`, or `/play` to try key features!
 
 ---
 
@@ -109,7 +118,8 @@ View global usage and performance metrics for Roti.
 ## 💡 About
 
 **Created by**: @soupa.  
-**Version**: Beta 1.0.1  
-**Repository**: [github.com/Angle-Brackets/RotiBot](https://github.com/Angle-Brackets/RotiBot)
+**Version**: Beta 1.1.0  
+**Repository**: [github.com/Angle-Brackets/RotiBot](https://github.com/Angle-Brackets/RotiBot)  
+**Wiki Powered By**: [WizWiki](https://github.com/Angle-Brackets/WizWiki) - Fast, asynchronous Wizard101 wiki scraper
 
 Roti is continuously updated with new features and improvements. Star the repository to stay updated!

@@ -201,6 +201,49 @@
       }
     }
   },
+  "Wiz": {
+    "title": "Help for the /wiz commands",
+    "description": "Query the Wizard101 Wiki powered by WizWiki!",
+    "command_base": "wiz",
+    "emoji": ":mage:",
+    "commands": {
+      "creature": {
+        "description": "View detailed information about a creature including stats, cheats, and drops with paginated display.",
+        "usage": "/wiz creature [name]",
+        "arguments": {
+          "name": "The name of the creature to look up."
+        }
+      },
+      "spell": {
+        "description": "View detailed information about a spell including school, accuracy, pip cost, and training sources.",
+        "usage": "/wiz spell [name]",
+        "arguments": {
+          "name": "The name of the spell to look up."
+        }
+      },
+      "item": {
+        "description": "View detailed information about an item including stats, level requirement, and drop sources.",
+        "usage": "/wiz item [name]",
+        "arguments": {
+          "name": "The name of the item to look up."
+        }
+      },
+      "recipe": {
+        "description": "View crafting information for a recipe including station, cost, vendors, and ingredients.",
+        "usage": "/wiz recipe [name]",
+        "arguments": {
+          "name": "The name of the recipe to look up."
+        }
+      },
+      "location": {
+        "description": "View detailed information about a world or area including map, sub-areas, and connections.",
+        "usage": "/wiz location [name]",
+        "arguments": {
+          "name": "The name of the location to look up."
+        }
+      }
+    }
+  },
   "Quotes": {
     "title": "Help for all of the Quote commands",
     "description": "Allows for the storing, retrieval, and modification of custom phrases on demand.",
