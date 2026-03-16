@@ -36,7 +36,7 @@ class RotiState(metaclass=Singleton):
         minutes = (total_seconds % 3600) // 60
         seconds = total_seconds % 60
 
-        return f"{days}d {hours}h {minutes}m F{seconds}s"
+        return f"{days}d {hours}h {minutes}m {seconds}s"
 
     def __setattr__(self, key, value):
         """ Prevents modification of attributes after initialization. """
