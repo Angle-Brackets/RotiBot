@@ -56,17 +56,23 @@ class Generate(commands.GroupCog, group_name = "generate"):
             return
         
         await interaction.followup.send(content="Unable to generate image", ephemeral=True)
-    
+
     @app_commands.command(name="text", description="Have Roti respond to what you say!")
     @app_commands.describe(prompt="The text prompt you want to give to Roti without any prior context.", model="Text Model to use")
     async def _gen_text(self, interaction : discord.Interaction, prompt : str, model : Optional[str]):
         await interaction.response.defer()
         
         # Use the model parameter if provided, otherwise defaults to gemini-fast in RotiBrain
-        response : str | None = await asyncio.to_thread(self.brain.generate_ai_response, prompt, None, None, model)
+        response : Optional[str] = await asyncio.to_thread(
+            self.brain.generate_text, 
+            prompt=prompt, 
+            model=model
+        )
+        
         if not response:
-            await interaction.followup.send("An error has occured, try again later.", ephemeral=True)
+            await interaction.followup.send("An error has occurred, try again later.", ephemeral=True)
             return
+            
         await interaction.followup.send(response)
 
     @_gen_image.autocomplete(name="model")
