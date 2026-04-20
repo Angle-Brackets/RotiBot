@@ -13,3 +13,4 @@ returns==0.26.0
 supabase==2.28.0
 urllib3==1.26.20
 wizwiki==0.1.4
+curl_cffi==0.15.0
