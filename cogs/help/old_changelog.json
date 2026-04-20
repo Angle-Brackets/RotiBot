@@ -1,5 +1,15 @@
 [
   {
+    "version": "Beta 1.1.0",
+    "summary": "🧙 Wizard101 Wiki Integration with WizWiki!",
+    "changes": {
+      "✨ New Features": "- **`/wiz` Command Group**: Full Wizard101 wiki integration powered by WizWiki\n  - `/wiz creature` - View boss/enemy stats, cheats, and drops with **paginated display** (Overview → Cheats → Drops)\n  - `/wiz spell` - Spell details including school, accuracy, pip cost, and training info\n  - `/wiz item` - Equipment stats, card grants, and drop sources\n  - `/wiz recipe` - Crafting requirements, vendors, and ingredient lists\n  - `/wiz location` - World details, sub-areas, maps, and connections\n- **School-Aware Coloring**: All `/wiz` commands feature dynamic color coding matching the school (Fire, Ice, Storm, Death, Life, Myth, Balance, Shadow, Sun, Moon, Star)\n- **School Emoji Icons**: Dynamic emoji displays in headers and stats, with custom emoji support from external servers\n- **Custom Emoji Support**: Configure custom school emojis with automatic fallback to default Unicode if unavailable\n- **WizWiki Branding**: All `/wiz` commands include a \"Powered by WizWiki\" footer linking to the WizWiki repository",
+      "🛠️ Improvements": "- **Intelligent Cheat Parsing**: Boss cheats are parsed and split into individual readable entries (handles both quoted format like Malistaire and plain text format like Morganthe)\n- **Paginated Creature Display**: Creature command now splits Overview, Cheats, and Drops into separate pages with Previous/Next navigation\n- **Truncation Safety**: Three-level truncation system prevents Discord's 4000 character limit errors:\n  - Per-cheat truncation (400 chars)\n  - Per-page limits (4 cheats displayed)\n  - Final content truncation (3850 chars)\n- **Ephemeral Messages**: All `/wiz` commands (and other bot commands) now use proper ephemeral messaging so only the command user sees responses\n- **Astral School Support**: Full support for Sun, Moon, and Star schools with colors and emojis",
+      "🐛 Bug Fixes": "- Fixed cheat parsing for bosses with concatenated cheat descriptions (Malistaire, Morganthe)\n- Fixed emoji fallback system to gracefully handle missing custom emojis\n- Fixed Discord character limit errors on complex boss pages",
+      "📚 New Dependencies": "- `re` (regex) for intelligent cheat parsing\n- Integration with WizWiki library (already installed)"
+    }
+  },
+  {
     "version": "Beta 1.0.2",
     "summary": "🌡️ Turning up the heat with AI Temperature!",
     "changes": {

@@ -8,6 +8,7 @@ import cloudscraper
 from discord import app_commands
 from discord.ext import commands
 from utils.RotiUtilities import cog_command
+from curl_cffi import requests as cffi_requests
 
 @cog_command
 class Wiz(commands.GroupCog, group_name="wiz"):
@@ -17,12 +18,6 @@ class Wiz(commands.GroupCog, group_name="wiz"):
         super().__init__()
         self.bot = bot
         self.logger = logging.getLogger(__name__)
-        # Initialize the scraper to bypass Cloudflare
-        self.scraper = cloudscraper.create_scraper(browser={
-            'browser': 'chrome',
-            'platform': 'windows',
-            'desktop': True
-        })
 
         self.SCHOOL_COLORS = {
             "Fire": 0xe74c3c,
@@ -52,7 +47,7 @@ class Wiz(commands.GroupCog, group_name="wiz"):
             "Star": "⭐",
         }
 
-        # Custom emoji IDs (from external servers) - configure these with your emoji IDs
+        # not added yet
         # Format: "School": emoji_id (as integer)
         # Leave as None to use default Unicode emoji
         self.CUSTOM_EMOJI_IDS = {
@@ -74,12 +69,14 @@ class Wiz(commands.GroupCog, group_name="wiz"):
         self.FOOTER_TEXT = "Powered by WizWiki"
 
     def _sync_download(self, url: str) -> io.BytesIO | None:
-        """Synchronous download for Cloudscraper bypass."""
+        """Synchronous download using curl_cffi to spoof TLS fingerprints."""
         try:
-            resp = self.scraper.get(url, timeout=10)
+            # Impersonate a modern browser exactly
+            resp = cffi_requests.get(url, impersonate="chrome110", timeout=10)
+            
             if resp.status_code == 200:
                 return io.BytesIO(resp.content)
-            self.logger.warning(f"Cloudscraper status {resp.status_code} for {url}")
+            self.logger.warning(f"Download status {resp.status_code} for {url}")
         except Exception as e:
             self.logger.error(f"Image Download Exception: {e}")
         return None
@@ -202,9 +199,16 @@ class Wiz(commands.GroupCog, group_name="wiz"):
 
     @app_commands.command(name="creature", description="Full details for a Wizard101 creature.")
     async def _creature(self, interaction: discord.Interaction, name: str):
-        await interaction.response.defer(ephemeral=True)
+        await self._creature_logic(interaction, name, ephemeral=True)
+
+    async def _creature_logic(self, interaction: discord.Interaction, name_or_obj, ephemeral: bool = True):
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=ephemeral)
         try:
-            c = await wizwiki.creature(name)
+            if isinstance(name_or_obj, str):
+                c = await wizwiki.creature(name_or_obj)
+            else:
+                c = name_or_obj
             file = None
             img_url = None
             if c.image_url:
@@ -213,12 +217,13 @@ class Wiz(commands.GroupCog, group_name="wiz"):
             accent_color = self._school_color(c.school)
 
             class CreatureLayout(discord.ui.LayoutView):
-                def __init__(self, creature, img_url, outer, accent_color):
+                def __init__(self, creature, img_url, outer, accent_color, is_public=False):
                     super().__init__()
                     self.c = creature
                     self.img_url = img_url
                     self.outer = outer
                     self.accent_color = accent_color
+                    self.is_public = is_public
                     self.current_page = 0
                     # Calculate total pages: always overview, + cheats if available, + drops if available
                     self.pages = ["overview"]
@@ -385,6 +390,14 @@ class Wiz(commands.GroupCog, group_name="wiz"):
                         emoji="🔗"
                     )
                     buttons.append(wiki_btn)
+                    if not self.is_public:
+                        pub_btn = discord.ui.Button(
+                            label="Publicize",
+                            style=discord.ButtonStyle.success,
+                            emoji="📢"
+                        )
+                        pub_btn.callback = self._on_publicize
+                        buttons.append(pub_btn)
                     self.add_item(discord.ui.ActionRow(*buttons))
 
                 async def _on_previous(self, interaction: discord.Interaction):
@@ -399,19 +412,39 @@ class Wiz(commands.GroupCog, group_name="wiz"):
                         self._render_page()
                         await interaction.response.edit_message(view=self)
 
-            msg = {"view": CreatureLayout(c, img_url, self, accent_color)}
+                async def _on_publicize(self, interaction: discord.Interaction):
+                    if self.is_public:
+                        return
+                    self.is_public = True
+                    self._render_page()
+                    # Edit immediately to remove/disable the button and prevent spam
+                    await interaction.response.edit_message(view=self)
+                    # Then perform the heavy lifting of sending the public message
+                    await self.outer._creature_logic(interaction, self.c, ephemeral=False)
+
+            msg = {"view": CreatureLayout(c, img_url, self, accent_color, is_public=not ephemeral)}
             if file:
                 msg["file"] = file
-            await interaction.followup.send(**msg)
+            if ephemeral:
+                await interaction.followup.send(**msg)
+            else:
+                await interaction.channel.send(**msg)
         except Exception as e:
             self.logger.exception(f"Creature error: {e}")
             await interaction.followup.send("❌ Error fetching creature.", ephemeral=True)
 
     @app_commands.command(name="spell", description="Detailed info for a Wizard101 spell.")
     async def _spell(self, interaction: discord.Interaction, name: str):
-        await interaction.response.defer(ephemeral=True)
+        await self._spell_logic(interaction, name, ephemeral=True)
+
+    async def _spell_logic(self, interaction: discord.Interaction, name_or_obj, ephemeral: bool = True):
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=ephemeral)
         try:
-            s = await wizwiki.spell(name)
+            if isinstance(name_or_obj, str):
+                s = await wizwiki.spell(name_or_obj)
+            else:
+                s = name_or_obj
             files = []
             c_file, c_url = await self._fetch_as_file(s.card_image_url, "card.png")
             a_file, a_url = await self._fetch_as_file(s.animation_gif_url, "anim.gif")
@@ -422,80 +455,91 @@ class Wiz(commands.GroupCog, group_name="wiz"):
             school_icon = self.SCHOOL_ICONS.get(s.school, "✨")
 
             class SpellLayout(discord.ui.LayoutView):
-                def __init__(self, s, c_url, a_url, outer, accent_color, icon):
+                def __init__(self, s, c_url, a_url, outer, accent_color, icon, is_public=False):
                     super().__init__()
-                    self.container = discord.ui.Container(accent_color=accent_color)
-                    header = f"## {icon} {s.name}"
-                    desc = s.description or "*No description available.*"
-                    if c_url:
+                    self.s = s
+                    self.c_url = c_url
+                    self.a_url = a_url
+                    self.outer = outer
+                    self.accent_color = accent_color
+                    self.icon = icon
+                    self.is_public = is_public
+                    self._render()
+
+                def _render(self):
+                    self.clear_items()
+                    self.container = discord.ui.Container(accent_color=self.accent_color)
+                    header = f"## {self.icon} {self.s.name}"
+                    desc = self.s.description or "*No description available.*"
+                    if self.c_url:
                         self.container.add_item(
                             discord.ui.Section(
                                 f"{header}\n{desc}",
-                                accessory=discord.ui.Thumbnail(c_url)
+                                accessory=discord.ui.Thumbnail(self.c_url)
                             )
                         )
                     else:
                         self.container.add_item(discord.ui.TextDisplay(f"{header}\n{desc}"))
-                    pvp_icon = "⚔️ PvP" if s.is_pvp else "🕊️ PvE Only"
-                    school = s.school or "Unknown"
+                    pvp_icon = "⚔️ PvP" if self.s.is_pvp else "🕊️ PvE Only"
+                    school = self.s.school or "Unknown"
                     stats = (
                         f"### 📊 Spell Stats\n"
-                        f"{icon} **School:** {school}\n"
-                        f"⚡ **Pip Cost:** {s.pip_cost or '—'}\n"
-                        f"✨ **School Pips:** {s.school_pip_cost or '—'}\n"
-                        f"🎯 **Accuracy:** {s.accuracy or '—'}\n"
+                        f"{self.icon} **School:** {school}\n"
+                        f"⚡ **Pip Cost:** {self.s.pip_cost or '—'}\n"
+                        f"✨ **School Pips:** {self.s.school_pip_cost or '—'}\n"
+                        f"🎯 **Accuracy:** {self.s.accuracy or '—'}\n"
                         f"⚖️ **Mode:** {pvp_icon}"
                     )
                     self.container.add_item(discord.ui.TextDisplay(stats))
-                    if s.type_icons:
-                        types = " • ".join(s.type_icons)
+                    if self.s.type_icons:
+                        types = " • ".join(self.s.type_icons)
                         self.container.add_item(
                             discord.ui.TextDisplay(f"🧩 **Spell Type:** {types}")
                         )
                     self.container.add_item(discord.ui.Separator())
-                    if a_url:
+                    if self.a_url:
                         self.container.add_item(
                             discord.ui.MediaGallery(
                                 discord.MediaGalleryItem(
-                                    a_url,
+                                    self.a_url,
                                     description="Spell Cast Animation"
                                 )
                             )
                         )
-                    if s.can_be_trained or s.trainers:
+                    if self.s.can_be_trained or self.s.trainers:
                         train_text = "### 🎓 Training"
-                        if s.training_points_cost:
-                            train_text += f"\n💠 **Cost:** {s.training_points_cost} Training Points"
-                        if s.trainers:
+                        if self.s.training_points_cost:
+                            train_text += f"\n💠 **Cost:** {self.s.training_points_cost} Training Points"
+                        if self.s.trainers:
                             trainers = "\n".join(
                                 f"• **[{t.name}]({t.url})**"
-                                for t in s.trainers[:5]
+                                for t in self.s.trainers[:5]
                             )
                             train_text += f"\n👤 **Trainers:**\n{trainers}"
-                        if s.training_requirements:
-                            train_text += f"\n📜 **Requirements:** {s.training_requirements}"
+                        if self.s.training_requirements:
+                            train_text += f"\n📜 **Requirements:** {self.s.training_requirements}"
                         self.container.add_item(discord.ui.TextDisplay(train_text))
-                    if s.prerequisites:
+                    if self.s.prerequisites:
                         prereqs = "\n".join(
                             f"• **[{p.name}]({p.url})**"
-                            for p in s.prerequisites[:6]
+                            for p in self.s.prerequisites[:6]
                         )
                         self.container.add_item(
                             discord.ui.TextDisplay(
                                 f"### 🔗 Prerequisite Spells\n{prereqs}"
                             )
                         )
-                    if s.acquisition_sources:
+                    if self.s.acquisition_sources:
                         quests = "\n".join(
                             f"• **[{q.name}]({q.url})**"
-                            for q in s.acquisition_sources[:8]
+                            for q in self.s.acquisition_sources[:8]
                         )
                         self.container.add_item(
                             discord.ui.TextDisplay(
                                 f"### 📜 Quest Rewards\n{quests}"
                             )
                         )
-                    if s.spellement_acquirable:
+                    if self.s.spellement_acquirable:
                         self.container.add_item(
                             discord.ui.TextDisplay(
                                 "🧬 **Spellement Upgrade Available**"
@@ -511,105 +555,207 @@ class Wiz(commands.GroupCog, group_name="wiz"):
                             ),
                             discord.ui.Button(
                                 label="View on Wiki",
-                                url=s.url
+                                url=self.s.url
                             )
                         )
                     )
+                    if not self.is_public:
+                        pub_btn = discord.ui.Button(
+                            label="Publicize",
+                            style=discord.ButtonStyle.success,
+                            emoji="📢"
+                        )
+                        pub_btn.callback = self._on_publicize
+                        self.add_item(discord.ui.ActionRow(pub_btn))
 
-            msg = {"view": SpellLayout(s, c_url, a_url, self, accent_color, school_icon)}
+                async def _on_publicize(self, interaction: discord.Interaction):
+                    if self.is_public:
+                        return
+                    self.is_public = True
+                    self._render()
+                    await interaction.response.edit_message(view=self)
+                    await self.outer._spell_logic(interaction, self.s, ephemeral=False)
+
+            msg = {"view": SpellLayout(s, c_url, a_url, self, accent_color, school_icon, is_public=not ephemeral)}
             if files: msg["files"] = files
-            await interaction.followup.send(**msg)
+            if ephemeral:
+                await interaction.followup.send(**msg)
+            else:
+                await interaction.channel.send(**msg)
         except Exception as e:
             self.logger.exception(f"Spell error: {e}")
             await interaction.followup.send("❌ Spell not found.", ephemeral=True)
 
     @app_commands.command(name="item", description="Full stats and source info for an item.")
     async def _item(self, interaction: discord.Interaction, name: str):
-        await interaction.response.defer(ephemeral=True)
+        await self._item_logic(interaction, name, ephemeral=True)
+
+    async def _item_logic(self, interaction: discord.Interaction, name_or_obj, ephemeral: bool = True):
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=ephemeral)
         try:
-            i = await wizwiki.item(name)
+            if isinstance(name_or_obj, str):
+                i = await wizwiki.item(name_or_obj)
+            else:
+                i = name_or_obj
             file, thumb_url = await self._fetch_as_file(i.image_male_url or i.image_female_url, "item.png")
 
             class ItemLayout(discord.ui.LayoutView):
-                def __init__(self, i, t_url, outer):
+                def __init__(self, i, t_url, outer, is_public=False):
                     super().__init__()
+                    self.i = i
+                    self.t_url = t_url
+                    self.outer = outer
+                    self.is_public = is_public
+                    self._render()
+
+                def _render(self):
+                    self.clear_items()
                     self.container = discord.ui.Container(accent_color=0xe74c3c)
-                    header = f"## ⚔️ {i.name}\n**Type:** {i.item_type} | **Lvl:** {i.level_requirement or 0}+"
-                    if t_url:
-                        self.container.add_item(discord.ui.Section(header, accessory=discord.ui.Thumbnail(t_url)))
+                    header = f"## ⚔️ {self.i.name}\n**Type:** {self.i.item_type} | **Lvl:** {self.i.level_requirement or 0}+"
+                    if self.t_url:
+                        self.container.add_item(discord.ui.Section(header, accessory=discord.ui.Thumbnail(self.t_url)))
                     else:
                         self.container.add_item(discord.ui.TextDisplay(header))
-                    if i.stats:
-                        self.container.add_item(discord.ui.TextDisplay("### 📈 Combat Stats\n" + outer._clean_stats(i.stats)))
-                    if i.item_cards:
-                        self.container.add_item(discord.ui.TextDisplay("### 🎴 Item Cards\n" + " • ".join(i.item_cards)))
-                    econ = f"**Sell Price:** {i.vendor_sell_price or 0} Gold\n" \
-                           f"**Auctionable:** {'✅' if i.is_auctionable else '❌'} | **Tradeable:** {'✅' if i.is_tradeable else '❌'}"
+                    if self.i.stats:
+                        self.container.add_item(discord.ui.TextDisplay("### 📈 Combat Stats\n" + self.outer._clean_stats(self.i.stats)))
+                    if self.i.item_cards:
+                        self.container.add_item(discord.ui.TextDisplay("### 🎴 Item Cards\n" + " • ".join(self.i.item_cards)))
+                    econ = f"**Sell Price:** {self.i.vendor_sell_price or 0} Gold\n" \
+                           f"**Auctionable:** {'✅' if self.i.is_auctionable else '❌'} | **Tradeable:** {'✅' if self.i.is_tradeable else '❌'}"
                     self.container.add_item(discord.ui.TextDisplay("### 💰 Economy\n" + econ))
-                    if i.dropped_by:
-                        self.container.add_item(discord.ui.TextDisplay("### 🎯 Dropped By\n" + outer._format_view_list(i.dropped_by)))
+                    if self.i.dropped_by:
+                        self.container.add_item(discord.ui.TextDisplay("### 🎯 Dropped By\n" + self.outer._format_view_list(self.i.dropped_by)))
                     self.add_item(self.container)
                     self.add_item(discord.ui.ActionRow(
                         discord.ui.Button(label="Powered by WizWiki", url="https://github.com/Angle-Brackets/WizWiki", emoji="🔗"),
-                        discord.ui.Button(label="Wiki Page", url=i.url)
+                        discord.ui.Button(label="Wiki Page", url=self.i.url)
                     ))
+                    if not self.is_public:
+                        pub_btn = discord.ui.Button(
+                            label="Publicize",
+                            style=discord.ButtonStyle.success,
+                            emoji="📢"
+                        )
+                        pub_btn.callback = self._on_publicize
+                        self.add_item(discord.ui.ActionRow(pub_btn))
 
-            msg = {"view": ItemLayout(i, thumb_url, self)}
+                async def _on_publicize(self, interaction: discord.Interaction):
+                    if self.is_public:
+                        return
+                    self.is_public = True
+                    self._render()
+                    await interaction.response.edit_message(view=self)
+                    await self.outer._item_logic(interaction, self.i, ephemeral=False)
+
+            msg = {"view": ItemLayout(i, thumb_url, self, is_public=not ephemeral)}
             if file: msg["file"] = file
-            await interaction.followup.send(**msg)
+            if ephemeral:
+                await interaction.followup.send(**msg)
+            else:
+                await interaction.channel.send(**msg)
         except Exception:
             await interaction.followup.send("❌ Item not found.", ephemeral=True)
 
     @app_commands.command(name="recipe", description="Crafting requirements and vendors.")
     async def _recipe(self, interaction: discord.Interaction, name: str):
-        await interaction.response.defer(ephemeral=True)
+        await self._recipe_logic(interaction, name, ephemeral=True)
+
+    async def _recipe_logic(self, interaction: discord.Interaction, name_or_obj, ephemeral: bool = True):
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=ephemeral)
         try:
-            r = await wizwiki.recipe(name)
+            if isinstance(name_or_obj, str):
+                r = await wizwiki.recipe(name_or_obj)
+            else:
+                r = name_or_obj
             class RecipeLayout(discord.ui.LayoutView):
-                def __init__(self, r, outer):
+                def __init__(self, r, outer, is_public=False):
                     super().__init__()
+                    self.r = r
+                    self.outer = outer
+                    self.is_public = is_public
+                    self._render()
+
+                def _render(self):
+                    self.clear_items()
                     self.container = discord.ui.Container(accent_color=0x9b59b6)
-                    self.container.add_item(discord.ui.TextDisplay(f"## 🛠️ Recipe: {r.name}\n**Station:** {r.crafting_station}"))
-                    if r.vendors:
-                        vendors = "\n".join([f"• **[{v.name}]({v.url})**" for v in r.vendors])
+                    self.container.add_item(discord.ui.TextDisplay(f"## 🛠️ Recipe: {self.r.name}\n**Station:** {self.r.crafting_station}"))
+                    if self.r.vendors:
+                        vendors = "\n".join([f"• **[{v.name}]({v.url})**" for v in self.r.vendors])
                         self.container.add_item(discord.ui.TextDisplay("### 👤 Vendors\n" + vendors))
-                    if r.cost:
-                        self.container.add_item(discord.ui.TextDisplay(f"### 💰 Cost\n**{r.cost} Gold**"))
-                    if r.ingredients:
-                        ing = "\n".join([f"• x{count} **{name}**" for name, count in r.ingredients.items()])
+                    if self.r.cost:
+                        self.container.add_item(discord.ui.TextDisplay(f"### 💰 Cost\n**{self.r.cost} Gold**"))
+                    if self.r.ingredients:
+                        ing = "\n".join([f"• x{count} **{name}**" for name, count in self.r.ingredients.items()])
                         self.container.add_item(discord.ui.TextDisplay("### 📦 Ingredients\n" + ing))
                     self.add_item(self.container)
                     self.add_item(discord.ui.ActionRow(
                         discord.ui.Button(label="Powered by WizWiki", url="https://github.com/Angle-Brackets/WizWiki", emoji="🔗"),
-                        discord.ui.Button(label="Wiki Page", url=r.url)
+                        discord.ui.Button(label="Wiki Page", url=self.r.url)
                     ))
+                    if not self.is_public:
+                        pub_btn = discord.ui.Button(
+                            label="Publicize",
+                            style=discord.ButtonStyle.success,
+                            emoji="📢"
+                        )
+                        pub_btn.callback = self._on_publicize
+                        self.add_item(discord.ui.ActionRow(pub_btn))
 
-            await interaction.followup.send(view=RecipeLayout(r, self))
+                async def _on_publicize(self, interaction: discord.Interaction):
+                    if self.is_public:
+                        return
+                    self.is_public = True
+                    self._render()
+                    await interaction.response.edit_message(view=self)
+                    await self.outer._recipe_logic(interaction, self.r, ephemeral=False)
+
+            msg = {"view": RecipeLayout(r, self, is_public=not ephemeral)}
+            if ephemeral:
+                await interaction.followup.send(**msg)
+            else:
+                await interaction.channel.send(**msg)
         except Exception as e:
             self.logger.exception(f"Recipe error: {e}")
             await interaction.followup.send("❌ Recipe not found.", ephemeral=True)
 
     @app_commands.command(name="location", description="Details about a world or area.")
     async def _location(self, interaction: discord.Interaction, name: str):
-        await interaction.response.defer(ephemeral=True)
+        await self._location_logic(interaction, name, ephemeral=True)
+
+    async def _location_logic(self, interaction: discord.Interaction, name_or_obj, ephemeral: bool = True):
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=ephemeral)
         try:
-            loc = await wizwiki.location(name)
+            if isinstance(name_or_obj, str):
+                loc = await wizwiki.location(name_or_obj)
+            else:
+                loc = name_or_obj
             map_file = None
             map_url = None
             if loc.map_url:
                 map_file, map_url = await self._fetch_as_file(loc.map_url, "map.png")
 
             class LocationLayout(discord.ui.LayoutView):
-                def __init__(self, l: wizwiki.Location, map_url, outer):
+                def __init__(self, l: wizwiki.Location, map_url, outer, is_public=False):
                     super().__init__()
+                    self.l = l
+                    self.map_url = map_url
+                    self.outer = outer
+                    self.is_public = is_public
+                    self._render()
+
+                def _render(self):
+                    self.clear_items()
                     self.container = discord.ui.Container(accent_color=0xe67e22)
-                    header = f"## 📍 {l.name}"
-                    desc = l.description or "*No description available.*"
-                    if map_url:
+                    header = f"## 📍 {self.l.name}"
+                    desc = self.l.description or "*No description available.*"
+                    if self.map_url:
                         self.container.add_item(
                             discord.ui.Section(
                                 f"{header}\n{desc}",
-                                accessory=discord.ui.Thumbnail(map_url)
+                                accessory=discord.ui.Thumbnail(self.map_url)
                             )
                         )
                     else:
@@ -617,42 +763,42 @@ class Wiz(commands.GroupCog, group_name="wiz"):
                             discord.ui.TextDisplay(f"{header}\n{desc}")
                         )
                     self.container.add_item(discord.ui.Separator())
-                    if l.parents:
+                    if self.l.parents:
                         parents = "\n".join(
                             f"• **[{p.name}]({p.url})**"
-                            for p in l.parents[:5]
+                            for p in self.l.parents[:5]
                         )
                         self.container.add_item(
                             discord.ui.TextDisplay(
                                 f"### 🌍 Parent Locations\n{parents}"
                             )
                         )
-                    if l.sublocations:
+                    if self.l.sublocations:
                         subs = "\n".join(
                             f"• **[{s.name}]({s.url})**"
-                            for s in l.sublocations[:10]
+                            for s in self.l.sublocations[:10]
                         )
                         self.container.add_item(
                             discord.ui.TextDisplay(
                                 f"### 🏘️ Sub-Areas\n{subs}"
                             )
                         )
-                    if l.connections:
+                    if self.l.connections:
                         conns = "\n".join(
                             f"• **[{c.name}]({c.url})**"
-                            for c in l.connections[:10]
+                            for c in self.l.connections[:10]
                         )
                         self.container.add_item(
                             discord.ui.TextDisplay(
                                 f"### 🧭 Connected Locations\n{conns}"
                             )
                         )
-                    if map_url:
+                    if self.map_url:
                         self.container.add_item(discord.ui.Separator())
                         self.container.add_item(
                             discord.ui.MediaGallery(
                                 discord.MediaGalleryItem(
-                                    map_url,
+                                    self.map_url,
                                     description="Area Map"
                                 )
                             )
@@ -667,15 +813,34 @@ class Wiz(commands.GroupCog, group_name="wiz"):
                             ),
                             discord.ui.Button(
                                 label="View on WizWiki",
-                                url=l.url
+                                url=self.l.url
                             )
                         )
                     )
+                    if not self.is_public:
+                        pub_btn = discord.ui.Button(
+                            label="Publicize",
+                            style=discord.ButtonStyle.success,
+                            emoji="📢"
+                        )
+                        pub_btn.callback = self._on_publicize
+                        self.add_item(discord.ui.ActionRow(pub_btn))
 
-            msg = {"view": LocationLayout(loc, map_url, self)}
+                async def _on_publicize(self, interaction: discord.Interaction):
+                    if self.is_public:
+                        return
+                    self.is_public = True
+                    self._render()
+                    await interaction.response.edit_message(view=self)
+                    await self.outer._location_logic(interaction, self.l, ephemeral=False)
+
+            msg = {"view": LocationLayout(loc, map_url, self, is_public=not ephemeral)}
             if map_file:
                 msg["file"] = map_file
-            await interaction.followup.send(**msg)
+            if ephemeral:
+                await interaction.followup.send(**msg)
+            else:
+                await interaction.channel.send(**msg)
         except Exception as e:
             self.logger.exception(f"Location error: {e}")
             await interaction.followup.send("❌ Location not found.", ephemeral=True)
