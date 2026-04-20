@@ -1,4 +1,4 @@
-# Roti Beta 1.1.0
+# Roti Beta 1.1.1
 
 A versatile Discord bot built with `discord.py` featuring AI generation, music playback, custom responses, Wizard101 wiki lookups, and more!
 
